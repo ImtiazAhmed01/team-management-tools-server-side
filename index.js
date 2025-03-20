@@ -23,15 +23,30 @@ const server = app.listen(port, () => {
 });
 async function run() {
     try {
-        // Connect the client to the server	(optional starting in v4.7)
-        // await client.connect();
-        // Send a ping to confirm a successful connection
-        // await client.db("admin").command({ ping: 1 });
-        console.log("Group backend code structure created")
+        await client.connect();
+        console.log("Connected to MongoDB");
+
+        app.post("/users", async (req, res) => {
+            try {
+                console.log("Received data:", req.body); // Debugging
+
+                const userData = req.body;
+                const db = client.db("collabnesttools");
+                const usersCollection = db.collection("users");
+
+                const result = await usersCollection.insertOne(userData);
+                res.status(201).json(result);
+            } catch (error) {
+                console.error("Error saving user:", error);
+                res.status(500).json({ message: "Failed to save user" });
+            }
+        });
+
     } catch (error) {
         console.error("Error connecting to MongoDB:", error);
     }
 }
+
 run().catch(console.dir);
 
 app.get('/', (req, res) => {
