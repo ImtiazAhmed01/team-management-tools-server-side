@@ -1,14 +1,14 @@
-const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config();
+const { MongoClient, ServerApiVersion } = require("mongodb");
 const port = process.env.PORT || 5000;
 const app = express();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+const { ObjectId } = require("mongodb");
 
 // Database Connection URI
 const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.fizmj.mongodb.net/?appName=Cluster0`;
@@ -19,7 +19,7 @@ const client = new MongoClient(uri, {
         version: ServerApiVersion.v1,
         strict: true,
         deprecationErrors: true,
-    }
+    },
 });
 
 // Async function to connect to MongoDB
@@ -72,6 +72,7 @@ app.get("/tasks", async (req, res) => {
         
         const taskCollection = database.collection('tasks');
         const userCollection = database.collection('users');
+        const profileCollection = db.collection("profileInfo");
         // get all task
         app.get('/tasks', async (req, res) => {
             try {
@@ -93,11 +94,11 @@ app.get("/tasks", async (req, res) => {
         });
 
         app.delete('/tasks/:id', async (req, res) => {
-            const taskId = req.params.id; 
-        
+            const taskId = req.params.id;
+
             try {
                 const result = await taskCollection.deleteOne({ _id: new ObjectId(taskId) });
-        
+
                 if (result.deletedCount === 1) {
                     res.status(200).json({ message: "Task deleted successfully" });
                 } else {
@@ -107,7 +108,7 @@ app.get("/tasks", async (req, res) => {
                 res.status(500).json({ message: "Error deleting task", error });
             }
         });
-        
+
         app.put('/tasks/:id', async (req, res) => {
             const taskId = req.params.id;
             const updatedTask = req.body;
@@ -137,21 +138,65 @@ app.get("/tasks", async (req, res) => {
             } catch (error) {
                 res.status(500).json({ message: "Error saving user data", error });
             }
+        })
+        
+
+        // profile related api
+        app.post("/profile/:email", async (req, res) => {
+            const email = req.params.email;
+            const profileInfo = req.body;
+
+            try {
+                const isExist = await profileCollection.findOne({ email });
+
+                if (isExist) {
+                    const updatedProfile = await profileCollection.updateOne(
+                        { email },
+                        { $set: profileInfo }
+                    );
+
+                    if (updatedProfile.modifiedCount > 0) {
+                        res.status(200).json({ message: "profile updated successfully!" });
+                    } else {
+                        res.status(400).json({ message: "Failed to update profile" });
+                    }
+                } else {
+                    const newProfile = await profileCollection.insertOne({
+                        email,
+                        ...profileInfo,
+                    });
+
+                    if (newProfile.insertedId) {
+                        res.status(201).json({ message: "Info added successfully!" });
+                    } else {
+                        res.status(400).json({ message: "Failed to add info!" });
+                    }
+                }
+            } catch (error) {
+                console.error("Error handling profile update:", error);
+                res.status(500).json({ message: "Server error" });
+            }
         });
+        app.get('/profileInfo/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = { email }
+            const result = await profileCollection.find(query).toArray();
+            res.send(result)
+        })
 
 
     } catch (error) {
         console.error("Error connecting to MongoDB:", error);
     }
+
+
 }
 run().catch(console.dir);
 
-// Routes
-app.get('/', (req, res) => {
-    res.send('SIMPLE CRUD IS RUNNING');
+app.get("/", (req, res) => {
+    res.send("SIMPLE CRUD IS RUNNING");
 });
+// app.listen(port, () => {
+//     console.log(`SIMPLE crud is running on port: ${port}`)
 
-// Start Server
-app.listen(port, () => {
-    console.log(`Server is running on port: ${port}`);
-});
+// })
