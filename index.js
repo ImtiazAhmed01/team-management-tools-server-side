@@ -30,6 +30,7 @@ async function run() {
         console.log("Group backend code structure created")
         const database = client.db('collabnesttools');
         const taskCollection = database.collection('tasks');
+        const userCollection = database.collection('users');
         // get all task
         app.get('/tasks', async (req, res) => {
             try {
@@ -51,7 +52,7 @@ async function run() {
         });
 
         app.delete('/tasks/:id', async (req, res) => {
-            const taskId = req.params.id; // Get the task id from the request parameters
+            const taskId = req.params.id; 
         
             try {
                 const result = await taskCollection.deleteOne({ _id: new ObjectId(taskId) });
@@ -83,6 +84,17 @@ async function run() {
                 }
             } catch (error) {
                 res.status(500).json({ message: "Error updating task", error });
+            }
+        });
+        // User info from database
+        app.post('/user', async (req, res) => {
+            const { fullName, email, photoURL, userRole, registrationDate } = req.body;
+
+            try {
+                const result = await userCollection.insertOne({ fullName, email, photoURL, userRole, registrationDate });
+                res.status(201).json({ message: "User saved successfully", userId: result.insertedId });
+            } catch (error) {
+                res.status(500).json({ message: "Error saving user data", error });
             }
         });
 
