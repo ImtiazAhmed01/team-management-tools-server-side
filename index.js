@@ -28,7 +28,7 @@ async function run() {
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
         console.log("Group backend code structure created")
-        const database = client.db('collabNest');
+        const database = client.db('collabnesttools');
         const taskCollection = database.collection('tasks');
         // get all task
         app.get('/tasks', async (req, res) => {
@@ -39,6 +39,18 @@ async function run() {
                 res.status(500).json({ message: "Error fetching tasks", error });
             }
         });
+        // post task
+        app.post('/tasks', async (req, res) => {
+            try {
+                const task = req.body;
+                const result = await taskCollection.insertOne(task);
+                res.status(201).json({ message: "Task added successfully", taskId: result.insertedId });
+            } catch (error) {
+                res.status(500).json({ message: "Error adding task", error });
+            }
+        });
+
+
     } catch (error) {
         console.error("Error connecting to MongoDB:", error);
     }
