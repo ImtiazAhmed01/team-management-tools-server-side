@@ -28,6 +28,17 @@ async function run() {
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
         console.log("Group backend code structure created")
+        const database = client.db('collabNest');
+        const taskCollection = database.collection('tasks');
+        // get all task
+        app.get('/tasks', async (req, res) => {
+            try {
+                const data = await taskCollection.find({}).toArray();
+                res.json(data);
+            } catch (error) {
+                res.status(500).json({ message: "Error fetching tasks", error });
+            }
+        });
     } catch (error) {
         console.error("Error connecting to MongoDB:", error);
     }
