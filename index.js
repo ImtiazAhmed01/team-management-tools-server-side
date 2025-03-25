@@ -50,6 +50,42 @@ async function run() {
             }
         });
 
+        app.delete('/tasks/:id', async (req, res) => {
+            const taskId = req.params.id; // Get the task id from the request parameters
+        
+            try {
+                const result = await taskCollection.deleteOne({ _id: new ObjectId(taskId) });
+        
+                if (result.deletedCount === 1) {
+                    res.status(200).json({ message: "Task deleted successfully" });
+                } else {
+                    res.status(404).json({ message: "Task not found" });
+                }
+            } catch (error) {
+                res.status(500).json({ message: "Error deleting task", error });
+            }
+        });
+        
+        app.put('/tasks/:id', async (req, res) => {
+            const taskId = req.params.id;
+            const updatedTask = req.body;
+
+            try {
+                const result = await taskCollection.updateOne(
+                    { _id: new ObjectId(taskId) },
+                    { $set: updatedTask }
+                );
+
+                if (result.modifiedCount === 1) {
+                    res.status(200).json({ message: "Task updated successfully" });
+                } else {
+                    res.status(404).json({ message: "Task not found or no changes made" });
+                }
+            } catch (error) {
+                res.status(500).json({ message: "Error updating task", error });
+            }
+        });
+
 
     } catch (error) {
         console.error("Error connecting to MongoDB:", error);
