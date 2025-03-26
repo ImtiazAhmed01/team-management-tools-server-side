@@ -4,13 +4,16 @@ require("dotenv").config();
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const port = process.env.PORT || 5000;
 const app = express();
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 const { ObjectId } = require("mongodb");
 
-const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.khtuk.mongodb.net/?retryWrites=true&w=majority`;
+// Database Connection URI
+const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.fizmj.mongodb.net/?appName=Cluster0`;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+// Create a MongoClient instance
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
@@ -18,17 +21,18 @@ const client = new MongoClient(uri, {
         deprecationErrors: true,
     },
 });
-const server = app.listen(port, () => {
-    console.log(`Server is running on port: ${port}`);
-});
+
+// Async function to connect to MongoDB
 async function run() {
     try {
         // await client.connect();
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
         console.log("Group backend code structure created")
+
         const database = client.db('collabnesttools');
         const tasksCollection = database.collection('tasks');
+
         const userCollection = database.collection('users');
         const profileCollection = database.collection("profileInfo");
 
