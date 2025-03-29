@@ -11,7 +11,7 @@ app.use(express.json());
 const { ObjectId } = require("mongodb");
 
 // Database Connection URI
-const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.fizmj.mongodb.net/?appName=Cluster0`;
+const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.khtuk.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient instance
 const client = new MongoClient(uri, {
@@ -334,7 +334,8 @@ run().catch(console.dir);
 app.get("/", (req, res) => {
     res.send("SIMPLE CRUD IS RUNNING");
 });
-// app.listen(port, () => {
-//     console.log(`SIMPLE crud is running on port: ${port}`)
+app.listen(port, () => {
+    console.log(`SIMPLE crud is running on port: ${port}`)
 
-// })
+})
+
