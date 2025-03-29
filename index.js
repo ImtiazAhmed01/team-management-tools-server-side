@@ -179,31 +179,31 @@ async function run() {
         });
 
 
-        app.delete("/tasks/:id", async (req, res) => {
-            try {
-                const taskId = req.params.id;
-                const userId = req.body.userId;
+        // app.delete("/tasks/:id", async (req, res) => {
+        //     try {
+        //         const taskId = req.params.id;
+        //         const userId = req.body.userId;
 
-                const db = client.db("collabnesttools");
-                const tasksCollection = db.collection("tasks");
+        //         const db = client.db("collabnesttools");
+        //         const tasksCollection = db.collection("tasks");
 
-                const task = await tasksCollection.findOne({ _id: new ObjectId(taskId) });
+        //         const task = await tasksCollection.findOne({ _id: new ObjectId(taskId) });
 
-                if (!task) {
-                    return res.status(404).json({ message: "Task not found" });
-                }
+        //         if (!task) {
+        //             return res.status(404).json({ message: "Task not found" });
+        //         }
 
-                if (task.userId !== userId) {
-                    return res.status(403).json({ message: "Unauthorized: You can only delete your own tasks" });
-                }
+        //         if (task.userId !== userId) {
+        //             return res.status(403).json({ message: "Unauthorized: You can only delete your own tasks" });
+        //         }
 
-                await tasksCollection.deleteOne({ _id: new ObjectId(taskId) });
-                res.status(200).json({ message: "Task deleted successfully" });
-            } catch (error) {
-                console.error("Error deleting task:", error);
-                res.status(500).json({ message: "Failed to delete task" });
-            }
-        });
+        //         await tasksCollection.deleteOne({ _id: new ObjectId(taskId) });
+        //         res.status(200).json({ message: "Task deleted successfully" });
+        //     } catch (error) {
+        //         console.error("Error deleting task:", error);
+        //         res.status(500).json({ message: "Failed to delete task" });
+        //     }
+        // });
 
         // get all task
         app.get('/tasks', async (req, res) => {
@@ -215,15 +215,15 @@ async function run() {
             }
         });
         // post task
-        app.post('/tasks', async (req, res) => {
-            try {
-                const task = req.body;
-                const result = await tasksCollection.insertOne(task);
-                res.status(201).json({ message: "Task added successfully", taskId: result.insertedId });
-            } catch (error) {
-                res.status(500).json({ message: "Error adding task", error });
-            }
-        });
+        // app.post('/tasks', async (req, res) => {
+        //     try {
+        //         const task = req.body;
+        //         const result = await tasksCollection.insertOne(task);
+        //         res.status(201).json({ message: "Task added successfully", taskId: result.insertedId });
+        //     } catch (error) {
+        //         res.status(500).json({ message: "Error adding task", error });
+        //     }
+        // });
 
         app.delete('/tasks/:id', async (req, res) => {
             const taskId = req.params.id;
