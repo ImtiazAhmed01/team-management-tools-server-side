@@ -32,11 +32,12 @@ async function run() {
     console.log("Group backend code structure created");
 
     const database = client.db('collabnesttools');
-    const tasksCollection = database.collection("tasks");
 
+    const tasksCollection = database.collection("tasks");
     const userCollection = database.collection("users");
     const profileCollection = database.collection("profileInfo");
     const reactionCollection = database.collection("reactions");
+    const commentCollection = database.collection("comments");
 
     // app.post("/users", async (req, res) => {
     // //     try {
@@ -398,19 +399,38 @@ async function run() {
           return res.status(404).send({ error: "Task not found" });
         }
         res.status(200).send(result.value);
-
       } catch (err) {
         res.status(500).send({ error: "Internal Server Error" });
       }
     });
 
-    app.get('/reaction/:id', async(req, res) => {
+    app.get("/reaction/:id", async (req, res) => {
       const id = req.params.id;
-      const query = {_id: id}
+      const query = { _id: id };
       const result = await reactionCollection.findOne(query);
-      res.status(200).send(result)
-    })
+      res.status(200).send(result);
+    });
     // reaction related api end
+
+    // comment related api start
+    app.post("/comments/:id", async (req, res) => {
+      const id = req.params.id;
+      const { commentInfo } = req.body;
+      const taskId = new ObjectId(id);
+      const result = await commentCollection.insertOne({
+        taskId,
+        ...commentInfo,
+      });
+      res.status(200).send(result);
+    });
+
+    app.get("/comment/:id", async (req, res) => {
+      const taskId = req.params.id;
+      const objectId = new ObjectId(taskId);
+      const result = await commentCollection.find({ taskId: objectId }).toArray();
+      res.status(200).send(result);
+    });
+    // comment related api end
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
