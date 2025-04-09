@@ -265,16 +265,46 @@ async function run() {
             }
         });
         // User info from database
-        app.post('/user', async (req, res) => {
-            const { fullName, email, photoURL, userRole, registrationDate } = req.body;
-
+app.post("/user", async (req, res) => {
+            const {
+                fullName,
+                email,
+                photoURL,
+                userRole,
+                registrationDate,
+                userImage,
+                profession,
+                yearOfExperience,
+                registryType,
+            } = req.body;
+        
             try {
-                const result = await userCollection.insertOne({ fullName, email, photoURL, userRole, registrationDate });
+                // Check if the user already exists
+                const existingUser = await userCollection.findOne({ email });
+        
+                if (existingUser) {
+                    return res.status(200).json({ message: "User already exists", userId: existingUser._id });
+                }
+        
+                // Insert new user
+                const result = await userCollection.insertOne({
+                    fullName,
+                    email,
+                    photoURL,
+                    userRole,
+                    registrationDate,
+                    userImage: userImage || "n/a",
+                    profession: profession || "n/a",
+                    yearOfExperience: yearOfExperience || "n/a",
+                    registryType: registryType || "email",
+                });
+        
                 res.status(201).json({ message: "User saved successfully", userId: result.insertedId });
             } catch (error) {
+                console.error("Error saving user data:", error);
                 res.status(500).json({ message: "Error saving user data", error });
             }
-        })
+        });
 
 
         // profile related api
