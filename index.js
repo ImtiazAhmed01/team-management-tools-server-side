@@ -4,7 +4,17 @@ require("dotenv").config();
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const port = process.env.PORT || 5000;
 const app = express();
-
+const http = require("http").createServer(app);
+const { Server } = require("socket.io");
+const io = new Server(http, {
+    cors: {
+        origin: "*", // Adjust this for production
+        methods: ["GET", "POST"]
+    }
+});
+io.on("connection", (socket) => {
+    console.log("A user connected");
+});
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -30,7 +40,7 @@ async function run() {
         console.log("Group backend code structure created");
 
         const database = client.db("collabnesttools");
-const tasksCollection = database.collection("Tasks");
+         const tasksCollection = database.collection("tasks");
 
 
 app.get("/tasks", async (req, res) => {
@@ -64,15 +74,29 @@ app.get("/tasks", async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 });
+app.post('/upload-image', async (req, res) => {
+    const task = req.body;
+
+    try {
+        const result = await client.db("collabnesttools").collection("tasks").insertOne(task);
+
+        // Emit to all connected clients
+        io.emit('newImage', task);
+
+        res.status(201).json({ message: "Image shared successfully", taskId: result.insertedId });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to upload image", error });
+    }
+});
         // Connect the client to the server	(optional starting in v4.7)
-        // await client.connect();
+        await client.connect();
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
         console.log("Group backend code structure created")
         
         const taskCollection = database.collection('tasks');
         const userCollection = database.collection('users');
-        const profileCollection = db.collection("profileInfo");
+        const profileCollection = database.collection("profileInfo");
         // get all task
         app.get('/tasks', async (req, res) => {
             try {
@@ -196,7 +220,7 @@ run().catch(console.dir);
 app.get("/", (req, res) => {
     res.send("SIMPLE CRUD IS RUNNING");
 });
-// app.listen(port, () => {
-//     console.log(`SIMPLE crud is running on port: ${port}`)
+http.listen(port, () => {
+     console.log(`SIMPLE crud is running on port: ${port}`)
 
-// })
+})
