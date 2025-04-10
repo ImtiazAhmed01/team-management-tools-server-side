@@ -115,14 +115,7 @@ app.post('/upload-image', async (req, res) => {
         //         res.status(500).json({ message: "Failed to save user" });
         //     }
         // });
-app.get('/user', async (req, res) => {
-            try {
-                const users = await userCollection.find({}).toArray();
-                res.json(users);
-            } catch (error) {
-                res.status(500).json({ message: "Error fetching users", error });
-            }
-        });
+
         app.post("/tasks", async (req, res) => {
             try {
                 // Log the incoming data for debugging
@@ -336,6 +329,15 @@ app.get('/user', async (req, res) => {
             }
         });
         // User info from database
+
+        app.get('/user', async (req, res) => {
+            try {
+                const users = await userCollection.find({}).toArray();
+                res.json(users);
+            } catch (error) {
+                res.status(500).json({ message: "Error fetching users", error });
+            }
+        });
 app.post("/user", async (req, res) => {
             const {
                 fullName,
