@@ -4,7 +4,17 @@ require("dotenv").config();
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const port = process.env.PORT || 5000;
 const app = express();
-
+const http = require("http").createServer(app);
+const { Server } = require("socket.io");
+const io = new Server(http, {
+    cors: {
+        origin: "*", // Adjust this for production
+        methods: ["GET", "POST"]
+    }
+});
+io.on("connection", (socket) => {
+    console.log("A user connected");
+});
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -25,13 +35,67 @@ const client = new MongoClient(uri, {
 // Async function to connect to MongoDB
 async function run() {
     try {
+        await client.connect();
+        await client.db("admin").command({ ping: 1 });
+        console.log("Group backend code structure created");
+
+        const database = client.db("collabnesttools");
+         const tasksCollection = database.collection("tasks");
+
+
+app.get("/tasks", async (req, res) => {
+    try {
+        const { filter, search, userId } = req.query;
+        let query = {};
+
+        if (userId) query.userId = userId;
+        if (search) query.title = { $regex: search, $options: "i" };
+
+        if (filter === "Tasks with Attachments") query.fileUrl = { $exists: true, $ne: "" };
+        if (filter === "Due Today") {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+            query.dueDate = { $gte: today, $lt: tomorrow };
+        }
+        if (filter === "Due This Week") {
+            const today = new Date();
+            const nextWeek = new Date(today);
+            nextWeek.setDate(today.getDate() + 7);
+            query.dueDate = { $gte: today, $lt: nextWeek };
+        }
+        if (filter === "Completed Tasks") query.status = "Completed";
+
+        const tasks = await tasksCollection.find(query).toArray();
+        res.json(tasks);
+    } catch (error) {
+        console.error("Error fetching tasks:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
+app.post('/upload-image', async (req, res) => {
+    const task = req.body;
+
+    try {
+        const result = await client.db("collabnesttools").collection("tasks").insertOne(task);
+
+        // Emit to all connected clients
+        io.emit('newImage', task);
+
+        res.status(201).json({ message: "Image shared successfully", taskId: result.insertedId });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to upload image", error });
+    }
+});
+        // Connect the client to the server	(optional starting in v4.7)
+        await client.connect();
         // await client.connect();
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
         console.log("Group backend code structure created")
 
-        const database = client.db('collabnesttools');
-        const tasksCollection = database.collection('tasks');
+       
 
         const userCollection = database.collection('users');
         const profileCollection = database.collection("profileInfo");
@@ -276,16 +340,55 @@ async function run() {
 
 
         // User info from database
-        app.post('/user', async (req, res) => {
-            const { fullName, email, photoURL, userRole, registrationDate } = req.body;
 
+        app.get('/user', async (req, res) => {
             try {
-                const result = await userCollection.insertOne({ fullName, email, photoURL, userRole, registrationDate });
+                const users = await userCollection.find({}).toArray();
+                res.json(users);
+            } catch (error) {
+                res.status(500).json({ message: "Error fetching users", error });
+            }
+        });
+app.post("/user", async (req, res) => {
+            const {
+                fullName,
+                email,
+                photoURL,
+                userRole,
+                registrationDate,
+                userImage,
+                profession,
+                yearOfExperience,
+                registryType,
+            } = req.body;
+        
+            try {
+                // Check if the user already exists
+                const existingUser = await userCollection.findOne({ email });
+        
+                if (existingUser) {
+                    return res.status(200).json({ message: "User already exists", userId: existingUser._id });
+                }
+        
+                // Insert new user
+                const result = await userCollection.insertOne({
+                    fullName,
+                    email,
+                    photoURL,
+                    userRole,
+                    registrationDate,
+                    userImage: userImage || "n/a",
+                    profession: profession || "n/a",
+                    yearOfExperience: yearOfExperience || "n/a",
+                    registryType: registryType || "email",
+                });
+        
                 res.status(201).json({ message: "User saved successfully", userId: result.insertedId });
             } catch (error) {
+                console.error("Error saving user data:", error);
                 res.status(500).json({ message: "Error saving user data", error });
             }
-        })
+        });
 
 
         // profile related api
@@ -345,8 +448,13 @@ run().catch(console.dir);
 app.get("/", (req, res) => {
     res.send("SIMPLE CRUD IS RUNNING");
 });
+
 app.listen(port, () => {
     console.log(`SIMPLE crud is running on port: ${port}`)
 
 })
+
+
+
+
 
