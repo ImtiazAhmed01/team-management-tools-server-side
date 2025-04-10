@@ -142,7 +142,22 @@ async function run() {
             const result = await profileCollection.find(query).toArray();
             res.send(result)
         })
-
+// notification
+        app.post("/send-email", async (req, res) => {
+            const { email, subject, message } = req.body;
+            try {
+                await transporter.sendMail({
+                    from: "your-email@gmail.com",
+                    to: email,
+                    subject,
+                    text: message,
+                });
+                res.status(200).send("Email sent");
+            } catch (error) {
+                console.error(error);
+                res.status(500).send("Failed to send email");
+            }
+        });
 
     } catch (error) {
         console.error("Error connecting to MongoDB:", error);
