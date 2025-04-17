@@ -34,6 +34,7 @@ const client = new MongoClient(uri, {
 });
 
 
+
 async function run() {
     try {
         //   await client.connect();
@@ -207,23 +208,6 @@ async function run() {
 
 
 
-        // app.post("/users", async (req, res) => {
-        // //     try {
-        //         console.log("Received data:", req.body);
-        //         const userData = req.body;
-        //         const db = client.db("collabnesttools");
-        //         const usersCollection = db.collection("users");
-
-
-        //         const result = await usersCollection.insertOne(userData);
-        //         res.status(201).json(result);
-        //     } catch (error) {
-        //         console.error("Error saving user:", error);
-        //         res.status(500).json({ message: "Failed to save user" });
-        //     }
-        // });
-
-
         app.post("/tasks", async (req, res) => {
             try {
                 console.log("Received data:", req.body);
@@ -297,49 +281,6 @@ async function run() {
         });
 
 
-        // editor change only
-        // app.put("/tasks/:id", async (req, res) => {
-        //     try {
-        //         const taskId = req.params.id;
-        //         const { title, description, priority, deadline, userId } = req.body;
-
-
-        //         const db = client.db("collabnesttools");
-        //         const tasksCollection = db.collection("tasks");
-
-
-        //         const task = await tasksCollection.findOne({
-        //             _id: new ObjectId(taskId),
-        //         });
-
-
-        //         if (!task) {
-        //             return res.status(404).json({ message: "Task not found" });
-        //         }
-
-
-        //         if (task.userId !== userId) {
-        //             return res.status(403).json({
-        //                 message: "Unauthorized: You can only edit your own tasks",
-        //             });
-        //         }
-
-
-        //         const updatedTask = {
-        //             $set: { title, description, priority, deadline },
-        //         };
-
-
-        //         await tasksCollection.updateOne(
-        //             { _id: new ObjectId(taskId) },
-        //             updatedTask
-        //         );
-        //         res.status(200).json({ message: "Task updated successfully" });
-        //     } catch (error) {
-        //         console.error("Error updating task:", error);
-        //         res.status(500).json({ message: "Failed to update task" });
-        //     }
-        // });
 
 
         app.put("/tasks/:id", async (req, res) => {
@@ -545,6 +486,7 @@ async function run() {
                 res.status(500).json({ message: "Error fetching tasks", error });
             }
         });
+
 
 
 
