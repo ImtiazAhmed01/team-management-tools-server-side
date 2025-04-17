@@ -22,7 +22,7 @@ io.on("connection", (socket) => {
 });
 
 // Database Connection URI
-const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.khtuk.mongodb.net/?retryWrites=true&w=majority`;
+const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.fizmj.mongodb.net/?appName=Cluster0`;
 
 // Create a MongoClient instance
 const client = new MongoClient(uri, {
@@ -207,41 +207,47 @@ async function run() {
 
 
 
+   
 
         app.post("/tasks", async (req, res) => {
             try {
+                // Log the incoming data for debugging
                 console.log("Received data:", req.body);
 
-                const { title, description, dueDate, userId, fileUrl } = req.body;
+                const { title, description, dueDate, status, userId, fileUrl } = req.body;
 
+                // Validate input
                 if (!title || !dueDate) {
                     return res.status(400).json({ success: false, message: "Title and due date are required" });
                 }
 
+                // Construct the task object
                 const task = {
                     title,
                     description,
                     dueDate,
-                    status: "To-Do",
+                    status,
                     assignedTo: userId,
-                    inProgressCount: 0,
-                    doneCount: 0,
-                    fileUrl,
+                    fileUrl,  // File URL passed from the frontend
                     createdAt: new Date()
                 };
 
+                // Insert the task into MongoDB
                 const result = await tasksCollection.insertOne(task);
 
-
+                // Check if the result is valid before accessing the ops array
                 if (!result || !result.insertedId) {
                     return res.status(500).json({ success: false, message: "Task creation failed" });
                 }
+
                 // if (!result1 || !result1.insertedId) {
                 //     return res.status(500).json({ success: false, message: "Task creation failed" });
                 // }
 
+
                 console.log("Task saved:", result);
 
+                // If insertion was successful, respond with the task details
                 const savedTask = {
                     _id: result.insertedId,
                     ...task
@@ -251,15 +257,6 @@ async function run() {
             } catch (error) {
                 console.error("Task creation failed:", error);
                 res.status(500).json({ success: false, message: "Task creation failed", error });
-            }
-        });
-        // get all the tasks
-        app.get('/tasks', async (req, res) => {
-            try {
-                const data = await tasksCollection.find({}).toArray();
-                res.json(data);
-            } catch (error) {
-                res.status(500).json({ message: "Error fetching tasks", error });
             }
         });
 
@@ -281,35 +278,36 @@ async function run() {
         });
 
 
-
-
         app.put("/tasks/:id", async (req, res) => {
-            const taskId = req.params.id;
-            const { title, description, dueDate, fileUrl } = req.body;
-
             try {
-                const result = await tasksCollection.updateOne(
-                    { _id: new ObjectId(taskId) },
-                    {
-                        $set: {
-                            title,
-                            description,
-                            dueDate,
-                            fileUrl,
-                        },
-                    }
-                );
+                const taskId = req.params.id;
+                const { title, description, priority, deadline, userId } = req.body;
 
-                if (result.matchedCount === 0) {
+                const db = client.db("collabnesttools");
+                const tasksCollection = db.collection("tasks");
+
+                const task = await tasksCollection.findOne({ _id: new ObjectId(taskId) });
+
+                if (!task) {
                     return res.status(404).json({ message: "Task not found" });
                 }
 
+                if (task.userId !== userId) {
+                    return res.status(403).json({ message: "Unauthorized: You can only edit your own tasks" });
+                }
+
+                const updatedTask = {
+                    $set: { title, description, priority, deadline }
+                };
+
+                await tasksCollection.updateOne({ _id: new ObjectId(taskId) }, updatedTask);
                 res.status(200).json({ message: "Task updated successfully" });
             } catch (error) {
                 console.error("Error updating task:", error);
-                res.status(500).json({ message: "Server error" });
+                res.status(500).json({ message: "Failed to update task" });
             }
         });
+
         // individual task assigning
         app.post('/assign-task', async (req, res) => {
             console.log("Incoming request to /assign-task");
@@ -321,88 +319,82 @@ async function run() {
                 return res.status(400).json({ message: "Missing required fields" });
             }
 
-            try {
-                const existingAssignment = await userTaskCollection.findOne({
-                    "task._id": task._id,
-                    userId
-                });
 
-                if (existingAssignment) {
-                    return res.status(400).json({ message: "Task is already assigned to this user" });
+                if (!updatedTask.value) {
+                    return res.status(404).json({ success: false, message: "Task not found" });
                 }
 
-                const result = await userTaskCollection.insertOne({
-                    task,
-                    email,
-                    userId,
-                    assignedAt: new Date()
-                });
+                // If status is "In-Progress" or "Completed", save it in a user-specific task collection
+                if (status === "In-Progress" || status === "Completed") {
+                    const userTasksCollection = db.collection("user_tasks");
 
-                console.log("Task assigned and saved:", result);
-                res.status(200).json({ message: "Task assigned successfully", result });
-            } catch (err) {
-                console.error("Error assigning task:", err);
-                res.status(500).json({ message: "Error assigning task" });
+                    const userTask = {
+                        userId,
+                        taskId: updatedTask.value._id,
+                        title: updatedTask.value.title,
+                        description: updatedTask.value.description,
+                        status,
+                        externalLink: updatedTask.value.externalLink,
+                        fileUrl: updatedTask.value.fileUrl,
+                        createdAt: new Date()
+                    };
+
+                    await userTasksCollection.insertOne(userTask);
+                }
+
+                res.status(200).json({ success: true, task: updatedTask.value });
+            } catch (error) {
+                res.status(500).json({ success: false, message: "Task update failed", error });
             }
         });
-        // Update user task (status + counts)
-        app.put("/mytasks/:id", async (req, res) => {
-            const taskDocId = req.params.id;
-            const updatedData = req.body;
 
-            console.log(`Updating user task for outer ID ${taskDocId}`);
-            console.log("Received update data:", updatedData);
 
+        app.delete("/tasks/:id", async (req, res) => {
             try {
-                const result = await userTaskCollection.updateOne(
-                    { _id: new ObjectId(taskDocId) },
-                    {
-                        $set: {
-                            "task.status": updatedData.status,
-                            "task.inProgressCount": updatedData.inProgressCount,
-                            "task.doneCount": updatedData.doneCount
-                        }
-                    }
-                );
+                const taskId = req.params.id;
+                const userId = req.body.userId;
 
-                console.log("User task update result:", result);
-                res.send(result);
-            } catch (err) {
-                console.error("Error in /mytasks/:id:", err);
-                res.status(500).send({ error: "Failed to update user task", details: err });
-            }
-        });
 
         // check if task exist
         app.get('/is-assigned/:taskId/:email', async (req, res) => {
             const { taskId, email } = req.params;
 
-            try {
-                const existingAssignment = await userTaskCollection.findOne({ "task._id": taskId, email });
 
-                if (existingAssignment) {
-                    return res.status(200).json({ assigned: true });
-                } else {
-                    return res.status(200).json({ assigned: false });
+                if (!task) {
+                    return res.status(404).json({ message: "Task not found" });
                 }
-            } catch (err) {
-                console.error(err);
-                res.status(500).json({ message: "Error checking assignment" });
-            }
-        });
 
-        app.get("/userassignedtasks/:email", async (req, res) => {
-            const userEmail = req.params.email;
+                if (task.userId !== userId) {
+                    return res.status(403).json({ message: "Unauthorized: You can only delete your own tasks" });
+                }
 
-            try {
-                const userTasks = await userTaskCollection.find({ email: userEmail }).toArray();
-                res.status(200).json(userTasks); // send only the array, no need to wrap in { success: true, tasks }
+                await tasksCollection.deleteOne({ _id: new ObjectId(taskId) });
+                res.status(200).json({ message: "Task deleted successfully" });
             } catch (error) {
-                res.status(500).json({ message: "Failed to fetch user tasks", error });
+                console.error("Error deleting task:", error);
+                res.status(500).json({ message: "Failed to delete task" });
             }
         });
 
-
+        // get all task
+        app.get('/tasks', async (req, res) => {
+            try {
+                const data = await tasksCollection.find({}).toArray();
+                res.json(data);
+            } catch (error) {
+                res.status(500).json({ message: "Error fetching tasks", error });
+            }
+        });
+        // post task
+        app.post('/tasks', async (req, res) => {
+            try {
+                const task = req.body;
+                const result = await tasksCollection.insertOne(task);
+                res.status(201).json({ message: "Task added successfully", taskId: result.insertedId });
+            } catch (error) {
+                res.status(500).json({ message: "Error adding task", error });
+            }
+        });
 
 
 
@@ -476,6 +468,9 @@ async function run() {
             }
         });
 
+        app.put('/tasks/:id', async (req, res) => {
+            const taskId = req.params.id;
+            const updatedTask = req.body;
 
         // get all task
         app.get("/tasks", async (req, res) => {
@@ -492,6 +487,7 @@ async function run() {
 
 
         app.post("/user", async (req, res) => {
+
             const {
                 fullName,
                 email,
@@ -664,7 +660,9 @@ run().catch(console.dir);
 app.get("/", (req, res) => {
     res.send("SIMPLE CRUD IS RUNNING");
 });
+
 app.listen(port, () => {
     console.log(`SIMPLE crud is running on port: ${port}`)
 
 })
+
