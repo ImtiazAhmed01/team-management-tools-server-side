@@ -4,6 +4,11 @@ require("dotenv").config();
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const port = process.env.PORT || 5000;
 const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+const { ObjectId } = require("mongodb");
 const http = require("http").createServer(app);
 const { Server } = require("socket.io");
 const io = new Server(http, {
@@ -15,13 +20,9 @@ const io = new Server(http, {
 io.on("connection", (socket) => {
   console.log("A user connected");
 });
-// Middleware
-app.use(cors());
-app.use(express.json());
-const { ObjectId } = require("mongodb");
 
 // Database Connection URI
-const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.fizmj.mongodb.net/?appName=Cluster0`;
+const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.khtuk.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient instance
 const client = new MongoClient(uri, {
@@ -32,15 +33,19 @@ const client = new MongoClient(uri, {
   },
 });
 
-// Async function to connect to MongoDB
 async function run() {
   try {
-    await client.connect();
-    await client.db("admin").command({ ping: 1 });
-    console.log("Group backend code structure created");
+    //   await client.connect();
+    //   await client.db("admin").command({ ping: 1 });
+    //   console.log("Group backend code structure created");
 
     const database = client.db("collabnesttools");
     const tasksCollection = database.collection("tasks");
+    const userCollection = database.collection("users");
+    const profileCollection = database.collection("profileInfo");
+    const reactionCollection = database.collection("reactions");
+    const commentCollection = database.collection("comments");
+    const userTaskCollection = database.collection("userTaskCollection");
 
     app.get("/tasks", async (req, res) => {
       try {
@@ -86,81 +91,170 @@ async function run() {
         // Emit to all connected clients
         io.emit("newImage", task);
 
-        res.status(201).json({
-          message: "Image shared successfully",
-          taskId: result.insertedId,
-        });
+        res
+          .status(201)
+          .json({
+            message: "Image shared successfully",
+            taskId: result.insertedId,
+          });
       } catch (error) {
         res.status(500).json({ message: "Failed to upload image", error });
       }
     });
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
-    // await client.connect();
-    // Send a ping to confirm a successful connection
-    // await client.db("admin").command({ ping: 1 });
-    console.log("Group backend code structure created");
 
-    const userCollection = database.collection("users");
-    const profileCollection = database.collection("profileInfo");
-    const reactionCollection = database.collection("reactions");
-    const commentCollection = database.collection("comments");
+    // req to db for group leader
+    // In your Express app file or separate router
+    app.post("/groupLeaderRequest", async (req, res) => {
+      const { name, email, uid } = req.body;
 
-    // app.post("/users", async (req, res) => {
-    // //     try {
-    //         console.log("Received data:", req.body);
-    //         const userData = req.body;
-    //         const db = client.db("collabnesttools");
-    //         const usersCollection = db.collection("users");
+      try {
+        const requestedAt = new Date();
+        const status = "pending";
 
-    //         const result = await usersCollection.insertOne(userData);
-    //         res.status(201).json(result);
-    //     } catch (error) {
-    //         console.error("Error saving user:", error);
-    //         res.status(500).json({ message: "Failed to save user" });
-    //     }
-    // });
+        const existing = await database
+          .collection("groupLeaderRequests")
+          .findOne({ email, status: "pending" });
+
+        if (existing) {
+          return res
+            .status(400)
+            .json({ message: "You have already submitted a request." });
+        }
+
+        await database.collection("groupLeaderRequests").insertOne({
+          name,
+          email,
+          uid,
+          requestedAt,
+          status,
+        });
+
+        res.status(200).json({ message: "Request submitted successfully." });
+      } catch (error) {
+        console.error("Request error:", error);
+        res.status(500).json({ message: "Server error. Try again later." });
+      }
+    });
+    app.get("/leaderRequests", async (req, res) => {
+      try {
+        const requests = await database
+          .collection("groupLeaderRequests")
+          .find({ status: "pending" })
+          .toArray();
+
+        res.status(200).json(requests);
+      } catch (error) {
+        console.error("Fetch error:", error);
+        res.status(500).json({ message: "Failed to fetch requests." });
+      }
+    });
+    // Approve group leader request
+    app.patch("/approveLeader/:email", async (req, res) => {
+      const { email } = req.params;
+
+      try {
+        // Update the userRole to 'group leader'
+        const result = await profileCollection.updateOne(
+          { email: email },
+          { $set: { userRole: "group leader" } } // Set the user role to 'group leader'
+        );
+
+        // Mark the group leader request as approved in the requests collection (if applicable)
+        const requestResult = await database
+          .collection("groupLeaderRequests")
+          .updateOne(
+            { email: email },
+            { $set: { status: "approved" } } // Update the request status to 'approved'
+          );
+
+        if (result.modifiedCount > 0 && requestResult.modifiedCount > 0) {
+          res
+            .status(200)
+            .json({ message: "User role updated and request approved" });
+        } else {
+          res
+            .status(400)
+            .json({ message: "Failed to approve user role or request" });
+        }
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server error" });
+      }
+    });
+    // Decline group leader request
+    app.patch("/declineLeader/:email", async (req, res) => {
+      const { email } = req.params;
+
+      try {
+        // Update the userRole to 'user'
+        // const result = await profileCollection.updateOne(
+        //     { email: email },
+        //     { $set: { userRole: "user" } }  // Reset the user role to 'user'
+        // );
+
+        // Mark the group leader request as declined in the requests collection
+        const requestResult = await database
+          .collection("groupLeaderRequests")
+          .updateOne(
+            { email: email },
+            { $set: { status: "declined" } } // Update the request status to 'declined'
+          );
+
+        if (requestResult.modifiedCount > 0) {
+          res
+            .status(200)
+            .json({ message: "User role updated and request declined" });
+        } else {
+          res
+            .status(400)
+            .json({ message: "Failed to decline user role or request" });
+        }
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server error" });
+      }
+    });
 
     app.post("/tasks", async (req, res) => {
       try {
-        // Log the incoming data for debugging
         console.log("Received data:", req.body);
 
-        const { title, description, dueDate, status, userId, fileUrl } =
-          req.body;
+        const { title, description, dueDate, userId, fileUrl } = req.body;
 
-        // Validate input
         if (!title || !dueDate) {
-          return res.status(400).json({
-            success: false,
-            message: "Title and due date are required",
-          });
+          return res
+            .status(400)
+            .json({
+              success: false,
+              message: "Title and due date are required",
+            });
         }
 
-        // Construct the task object
         const task = {
           title,
           description,
           dueDate,
-          status,
+          status: "To-Do",
           assignedTo: userId,
-          fileUrl, // File URL passed from the frontend
+          inProgressCount: 0,
+          doneCount: 0,
+          fileUrl,
           createdAt: new Date(),
         };
 
-        // Insert the task into MongoDB
         const result = await tasksCollection.insertOne(task);
 
-        // Check if the result is valid before accessing the ops array
         if (!result || !result.insertedId) {
           return res
             .status(500)
             .json({ success: false, message: "Task creation failed" });
         }
+        // if (!result1 || !result1.insertedId) {
+        //     return res.status(500).json({ success: false, message: "Task creation failed" });
+        // }
 
         console.log("Task saved:", result);
 
-        // If insertion was successful, respond with the task details
         const savedTask = {
           _id: result.insertedId,
           ...task,
@@ -172,6 +266,15 @@ async function run() {
         res
           .status(500)
           .json({ success: false, message: "Task creation failed", error });
+      }
+    });
+    // get all the tasks
+    app.get("/tasks", async (req, res) => {
+      try {
+        const data = await tasksCollection.find({}).toArray();
+        res.json(data);
+      } catch (error) {
+        res.status(500).json({ message: "Error fetching tasks", error });
       }
     });
 
@@ -191,138 +294,189 @@ async function run() {
       }
     });
 
-    // editor change only
     app.put("/tasks/:id", async (req, res) => {
+      const taskId = req.params.id;
+      const { title, description, dueDate, fileUrl } = req.body;
+
       try {
-        const taskId = req.params.id;
-        const { title, description, priority, deadline, userId } = req.body;
+        const result = await tasksCollection.updateOne(
+          { _id: new ObjectId(taskId) },
+          {
+            $set: {
+              title,
+              description,
+              dueDate,
+              fileUrl,
+            },
+          }
+        );
 
-        const db = client.db("collabnesttools");
-        const tasksCollection = db.collection("tasks");
-
-        const task = await tasksCollection.findOne({
-          _id: new ObjectId(taskId),
-        });
-
-        if (!task) {
+        if (result.matchedCount === 0) {
           return res.status(404).json({ message: "Task not found" });
         }
 
-        if (task.userId !== userId) {
-          return res.status(403).json({
-            message: "Unauthorized: You can only edit your own tasks",
-          });
-        }
-
-        const updatedTask = {
-          $set: { title, description, priority, deadline },
-        };
-
-        await tasksCollection.updateOne(
-          { _id: new ObjectId(taskId) },
-          updatedTask
-        );
         res.status(200).json({ message: "Task updated successfully" });
       } catch (error) {
         console.error("Error updating task:", error);
-        res.status(500).json({ message: "Failed to update task" });
+        res.status(500).json({ message: "Server error" });
       }
     });
+    // individual task assigning
+    app.post("/assign-task", async (req, res) => {
+      console.log("Incoming request to /assign-task");
+      console.log("Request body:", req.body);
 
-    app.put("/tasks/:taskId", async (req, res) => {
+      const { task, userId, email } = req.body;
+
+      if (!task || !task._id || !userId || !email) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
       try {
-        const taskId = new ObjectId(req.params.taskId);
-        const { status, userId } = req.body;
+        const existingAssignment = await userTaskCollection.findOne({
+          "task._id": task._id,
+          userId,
+        });
 
-        // Update the task status in the main task collection
-        const updatedTask = await tasksCollection.findOneAndUpdate(
-          { _id: taskId },
-          { $set: { status } },
-          { returnDocument: "after" }
+        if (existingAssignment) {
+          return res
+            .status(400)
+            .json({ message: "Task is already assigned to this user" });
+        }
+
+        const result = await userTaskCollection.insertOne({
+          task,
+          email,
+          userId,
+          assignedAt: new Date(),
+        });
+
+        console.log("Task assigned and saved:", result);
+        res.status(200).json({ message: "Task assigned successfully", result });
+      } catch (err) {
+        console.error("Error assigning task:", err);
+        res.status(500).json({ message: "Error assigning task" });
+      }
+    });
+    // Update user task (status + counts)
+    app.put("/mytasks/:id", async (req, res) => {
+      const taskDocId = req.params.id;
+      const updatedData = req.body;
+
+      console.log(`Updating user task for outer ID ${taskDocId}`);
+      console.log("Received update data:", updatedData);
+
+      try {
+        const result = await userTaskCollection.updateOne(
+          { _id: new ObjectId(taskDocId) },
+          {
+            $set: {
+              "task.status": updatedData.status,
+              "task.inProgressCount": updatedData.inProgressCount,
+              "task.doneCount": updatedData.doneCount,
+            },
+          }
         );
 
-        if (!updatedTask.value) {
-          return res
-            .status(404)
-            .json({ success: false, message: "Task not found" });
-        }
-
-        // If status is "In-Progress" or "Completed", save it in a user-specific task collection
-        if (status === "In-Progress" || status === "Completed") {
-          const userTasksCollection = db.collection("user_tasks");
-
-          const userTask = {
-            userId,
-            taskId: updatedTask.value._id,
-            title: updatedTask.value.title,
-            description: updatedTask.value.description,
-            status,
-            externalLink: updatedTask.value.externalLink,
-            fileUrl: updatedTask.value.fileUrl,
-            createdAt: new Date(),
-          };
-
-          await userTasksCollection.insertOne(userTask);
-        }
-
-        res.status(200).json({ success: true, task: updatedTask.value });
-      } catch (error) {
+        console.log("User task update result:", result);
+        res.send(result);
+      } catch (err) {
+        console.error("Error in /mytasks/:id:", err);
         res
           .status(500)
-          .json({ success: false, message: "Task update failed", error });
+          .send({ error: "Failed to update user task", details: err });
       }
     });
 
-    app.delete("/tasks/:id", async (req, res) => {
+    // check if task exist
+    app.get("/is-assigned/:taskId/:email", async (req, res) => {
+      const { taskId, email } = req.params;
+
       try {
-        const taskId = req.params.id;
-        const userId = req.body.userId;
+        const existingAssignment = await userTaskCollection.findOne({
+          "task._id": taskId,
+          email,
+        });
 
-        const db = client.db("collabnesttools");
-        const tasksCollection = db.collection("tasks");
+        if (existingAssignment) {
+          return res.status(200).json({ assigned: true });
+        } else {
+          return res.status(200).json({ assigned: false });
+        }
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Error checking assignment" });
+      }
+    });
 
+    app.get("/userassignedtasks/:email", async (req, res) => {
+      const userEmail = req.params.email;
+
+      try {
+        const userTasks = await userTaskCollection
+          .find({ email: userEmail })
+          .toArray();
+        res.status(200).json(userTasks); // send only the array, no need to wrap in { success: true, tasks }
+      } catch (error) {
+        res.status(500).json({ message: "Failed to fetch user tasks", error });
+      }
+    });
+
+    app.put("/task/:id", async (req, res) => {
+      const taskId = req.params.id;
+      let { inProgressCount = 0, doneCount = 0 } = req.body;
+
+      // Ensure input is numeric
+      inProgressCount = parseInt(inProgressCount, 10) || 0;
+      doneCount = parseInt(doneCount, 10) || 0;
+
+      console.log(`🛠️ Updating main task counts for ID ${taskId}`);
+      console.log("🔢 Received delta counts:", { inProgressCount, doneCount });
+
+      try {
         const task = await tasksCollection.findOne({
           _id: new ObjectId(taskId),
         });
 
-        if (!task) {
-          return res.status(404).json({ message: "Task not found" });
+        // If existing fields are strings, convert them first
+        const updates = {};
+        if (typeof task?.doneCount === "string") {
+          updates.doneCount = parseInt(task.doneCount, 10) || 0;
+        }
+        if (typeof task?.inProgressCount === "string") {
+          updates.inProgressCount = parseInt(task.inProgressCount, 10) || 0;
         }
 
-        if (task.userId !== userId) {
-          return res.status(403).json({
-            message: "Unauthorized: You can only delete your own tasks",
-          });
+        // If any fix needed, update document
+        if (Object.keys(updates).length > 0) {
+          await tasksCollection.updateOne(
+            { _id: new ObjectId(taskId) },
+            { $set: updates }
+          );
+          console.log(
+            "🔧 Fixed non-numeric fields before incrementing:",
+            updates
+          );
         }
 
-        await tasksCollection.deleteOne({ _id: new ObjectId(taskId) });
-        res.status(200).json({ message: "Task deleted successfully" });
-      } catch (error) {
-        console.error("Error deleting task:", error);
-        res.status(500).json({ message: "Failed to delete task" });
-      }
-    });
+        // Now perform the increment operation
+        const result = await tasksCollection.updateOne(
+          { _id: new ObjectId(taskId) },
+          {
+            $inc: {
+              inProgressCount,
+              doneCount,
+            },
+          }
+        );
 
-    // get all task
-    app.get("/tasks", async (req, res) => {
-      try {
-        const data = await tasksCollection.find({}).toArray();
-        res.json(data);
-      } catch (error) {
-        res.status(500).json({ message: "Error fetching tasks", error });
-      }
-    });
-    // post task
-    app.post("/tasks", async (req, res) => {
-      try {
-        const task = req.body;
-        const result = await tasksCollection.insertOne(task);
-        res.status(201).json({
-          message: "Task added successfully",
-          taskId: result.insertedId,
-        });
-      } catch (error) {
-        res.status(500).json({ message: "Error adding task", error });
+        console.log("✅ Task count update result:", result);
+        res.send(result);
+      } catch (err) {
+        console.error("❌ Error in /task/:id:", err);
+        res
+          .status(500)
+          .send({ error: "Failed to update task counts", details: err });
       }
     });
 
@@ -344,29 +498,16 @@ async function run() {
       }
     });
 
-    app.put("/tasks/:id", async (req, res) => {
-      const taskId = req.params.id;
-      const updatedTask = req.body;
-
+    // get all task
+    app.get("/tasks", async (req, res) => {
       try {
-        const result = await tasksCollection.updateOne(
-          { _id: new ObjectId(taskId) },
-          { $set: updatedTask }
-        );
-
-        if (result.modifiedCount === 1) {
-          res.status(200).json({ message: "Task updated successfully" });
-        } else {
-          res
-            .status(404)
-            .json({ message: "Task not found or no changes made" });
-        }
+        const data = await tasksCollection.find({}).toArray();
+        res.json(data);
       } catch (error) {
-        res.status(500).json({ message: "Error updating task", error });
+        res.status(500).json({ message: "Error fetching tasks", error });
       }
     });
 
-    // User info from database
     app.post("/user", async (req, res) => {
       const {
         fullName,
@@ -390,8 +531,8 @@ async function run() {
             .json({ message: "User already exists", userId: existingUser._id });
         }
 
-        // Insert new user
-        const result = await userCollection.insertOne({
+        // Common user data
+        const userData = {
           fullName,
           email,
           photoURL,
@@ -401,26 +542,15 @@ async function run() {
           profession: profession || "n/a",
           yearOfExperience: yearOfExperience || "n/a",
           registryType: registryType || "email",
-        });
-        const result2 = await profileCollection.insertOne({
-          fullName,
-          email,
-          photoURL,
-          userRole,
-          registrationDate,
-          userImage: userImage || "n/a",
-          profession: profession || "n/a",
-          yearOfExperience: yearOfExperience || "n/a",
-          registryType: registryType || "email",
-        });
+        };
+
+        // Insert into both collections
+        const result = await userCollection.insertOne(userData);
+        await profileCollection.insertOne(userData);
 
         res.status(201).json({
           message: "User saved successfully",
           userId: result.insertedId,
-        });
-        res.status(201).json({
-          message: "User saved successfully",
-          userId: result2.insertedId,
         });
       } catch (error) {
         console.error("Error saving user data:", error);
@@ -516,6 +646,14 @@ async function run() {
       });
       res.status(200).send(result);
     });
+    app.get("/user", async (req, res) => {
+      try {
+        const users = await userCollection.find({}).toArray();
+        res.json(users);
+      } catch (error) {
+        res.status(500).json({ message: "Error fetching users", error });
+      }
+    });
 
     app.get("/comment/:id", async (req, res) => {
       const taskId = req.params.id;
@@ -547,19 +685,8 @@ async function run() {
           { email },
           { $set: { photoURL: image, userImage: image } }
         );
-        const result2 = await profileCollection.updateOne(
-          { email },
-          { $set: { photoURL: image, userImage: image } }
-        );
 
         if (result.modifiedCount > 0) {
-          res.status(200).json({ message: "User photo updated successfully" });
-        } else {
-          res
-            .status(404)
-            .json({ message: "User not found or no changes made" });
-        }
-        if (result2.modifiedCount > 0) {
           res.status(200).json({ message: "User photo updated successfully" });
         } else {
           res
@@ -585,12 +712,13 @@ async function run() {
     console.error("Error connecting to MongoDB:", error);
   }
 }
+// }
 
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
   res.send("SIMPLE CRUD IS RUNNING");
 });
-http.listen(port, () => {
+app.listen(port, () => {
   console.log(`SIMPLE crud is running on port: ${port}`);
 });
