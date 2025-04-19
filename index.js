@@ -7,13 +7,13 @@ const app = express();
 const http = require("http").createServer(app);
 const { Server } = require("socket.io");
 const io = new Server(http, {
-    cors: {
-        origin: "*", // Adjust this for production
-        methods: ["GET", "POST"]
-    }
+  cors: {
+    origin: "*", // Adjust this for production
+    methods: ["GET", "POST"],
+  },
 });
 io.on("connection", (socket) => {
-    console.log("A user connected");
+  console.log("A user connected");
 });
 // Middleware
 app.use(cors());
@@ -25,410 +25,572 @@ const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster
 
 // Create a MongoClient instance
 const client = new MongoClient(uri, {
-    serverApi: {
-        version: ServerApiVersion.v1,
-        strict: true,
-        deprecationErrors: true,
-    },
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
 });
 
 // Async function to connect to MongoDB
 async function run() {
-    try {
-        await client.connect();
-        await client.db("admin").command({ ping: 1 });
-        console.log("Group backend code structure created");
+  try {
+    await client.connect();
+    await client.db("admin").command({ ping: 1 });
+    console.log("Group backend code structure created");
 
-        const database = client.db("collabnesttools");
-         const tasksCollection = database.collection("tasks");
+    const database = client.db("collabnesttools");
+    const tasksCollection = database.collection("tasks");
 
-
-app.get("/tasks", async (req, res) => {
-    try {
+    app.get("/tasks", async (req, res) => {
+      try {
         const { filter, search, userId } = req.query;
         let query = {};
 
         if (userId) query.userId = userId;
         if (search) query.title = { $regex: search, $options: "i" };
 
-        if (filter === "Tasks with Attachments") query.fileUrl = { $exists: true, $ne: "" };
+        if (filter === "Tasks with Attachments")
+          query.fileUrl = { $exists: true, $ne: "" };
         if (filter === "Due Today") {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const tomorrow = new Date(today);
-            tomorrow.setDate(today.getDate() + 1);
-            query.dueDate = { $gte: today, $lt: tomorrow };
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const tomorrow = new Date(today);
+          tomorrow.setDate(today.getDate() + 1);
+          query.dueDate = { $gte: today, $lt: tomorrow };
         }
         if (filter === "Due This Week") {
-            const today = new Date();
-            const nextWeek = new Date(today);
-            nextWeek.setDate(today.getDate() + 7);
-            query.dueDate = { $gte: today, $lt: nextWeek };
+          const today = new Date();
+          const nextWeek = new Date(today);
+          nextWeek.setDate(today.getDate() + 7);
+          query.dueDate = { $gte: today, $lt: nextWeek };
         }
         if (filter === "Completed Tasks") query.status = "Completed";
 
         const tasks = await tasksCollection.find(query).toArray();
         res.json(tasks);
-    } catch (error) {
+      } catch (error) {
         console.error("Error fetching tasks:", error);
         res.status(500).json({ message: "Internal server error" });
-    }
-});
-app.post('/upload-image', async (req, res) => {
-    const task = req.body;
+      }
+    });
+    app.post("/upload-image", async (req, res) => {
+      const task = req.body;
 
-    try {
-        const result = await client.db("collabnesttools").collection("tasks").insertOne(task);
+      try {
+        const result = await client
+          .db("collabnesttools")
+          .collection("tasks")
+          .insertOne(task);
 
         // Emit to all connected clients
-        io.emit('newImage', task);
+        io.emit("newImage", task);
 
-        res.status(201).json({ message: "Image shared successfully", taskId: result.insertedId });
-    } catch (error) {
+        res.status(201).json({
+          message: "Image shared successfully",
+          taskId: result.insertedId,
+        });
+      } catch (error) {
         res.status(500).json({ message: "Failed to upload image", error });
-    }
-});
-        // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
-        // await client.connect();
-        // Send a ping to confirm a successful connection
-        // await client.db("admin").command({ ping: 1 });
-        console.log("Group backend code structure created")
+      }
+    });
+    // Connect the client to the server	(optional starting in v4.7)
+    await client.connect();
+    // await client.connect();
+    // Send a ping to confirm a successful connection
+    // await client.db("admin").command({ ping: 1 });
+    console.log("Group backend code structure created");
 
-       
+    const userCollection = database.collection("users");
+    const profileCollection = database.collection("profileInfo");
+    const reactionCollection = database.collection("reactions");
+    const commentCollection = database.collection("comments");
 
-        const userCollection = database.collection('users');
-        const profileCollection = database.collection("profileInfo");
+    // app.post("/users", async (req, res) => {
+    // //     try {
+    //         console.log("Received data:", req.body);
+    //         const userData = req.body;
+    //         const db = client.db("collabnesttools");
+    //         const usersCollection = db.collection("users");
 
+    //         const result = await usersCollection.insertOne(userData);
+    //         res.status(201).json(result);
+    //     } catch (error) {
+    //         console.error("Error saving user:", error);
+    //         res.status(500).json({ message: "Failed to save user" });
+    //     }
+    // });
 
-        // app.post("/users", async (req, res) => {
-        // //     try {
-        //         console.log("Received data:", req.body);
-        //         const userData = req.body;
-        //         const db = client.db("collabnesttools");
-        //         const usersCollection = db.collection("users");
+    app.post("/tasks", async (req, res) => {
+      try {
+        // Log the incoming data for debugging
+        console.log("Received data:", req.body);
 
-        //         const result = await usersCollection.insertOne(userData);
-        //         res.status(201).json(result);
-        //     } catch (error) {
-        //         console.error("Error saving user:", error);
-        //         res.status(500).json({ message: "Failed to save user" });
-        //     }
-        // });
+        const { title, description, dueDate, status, userId, fileUrl } =
+          req.body;
 
-        app.post("/tasks", async (req, res) => {
-            try {
-                // Log the incoming data for debugging
-                console.log("Received data:", req.body);
+        // Validate input
+        if (!title || !dueDate) {
+          return res.status(400).json({
+            success: false,
+            message: "Title and due date are required",
+          });
+        }
 
-                const { title, description, dueDate, status, userId, fileUrl } = req.body;
+        // Construct the task object
+        const task = {
+          title,
+          description,
+          dueDate,
+          status,
+          assignedTo: userId,
+          fileUrl, // File URL passed from the frontend
+          createdAt: new Date(),
+        };
 
-                // Validate input
-                if (!title || !dueDate) {
-                    return res.status(400).json({ success: false, message: "Title and due date are required" });
-                }
+        // Insert the task into MongoDB
+        const result = await tasksCollection.insertOne(task);
 
-                // Construct the task object
-                const task = {
-                    title,
-                    description,
-                    dueDate,
-                    status,
-                    assignedTo: userId,
-                    fileUrl,  // File URL passed from the frontend
-                    createdAt: new Date()
-                };
+        // Check if the result is valid before accessing the ops array
+        if (!result || !result.insertedId) {
+          return res
+            .status(500)
+            .json({ success: false, message: "Task creation failed" });
+        }
 
-                // Insert the task into MongoDB
-                const result = await tasksCollection.insertOne(task);
+        console.log("Task saved:", result);
 
-                // Check if the result is valid before accessing the ops array
-                if (!result || !result.insertedId) {
-                    return res.status(500).json({ success: false, message: "Task creation failed" });
-                }
+        // If insertion was successful, respond with the task details
+        const savedTask = {
+          _id: result.insertedId,
+          ...task,
+        };
 
-                console.log("Task saved:", result);
+        res.status(201).json({ success: true, task: savedTask });
+      } catch (error) {
+        console.error("Task creation failed:", error);
+        res
+          .status(500)
+          .json({ success: false, message: "Task creation failed", error });
+      }
+    });
 
-                // If insertion was successful, respond with the task details
-                const savedTask = {
-                    _id: result.insertedId,
-                    ...task
-                };
+    // Get tasks for a user
+    app.get("/user-tasks/:userId", async (req, res) => {
+      try {
+        const userTasks = await tasksCollection
+          .find({ assignedTo: req.params.userId })
+          .toArray();
+        res.status(200).json({ success: true, tasks: userTasks });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          message: "Failed to fetch user tasks",
+          error,
+        });
+      }
+    });
 
-                res.status(201).json({ success: true, task: savedTask });
-            } catch (error) {
-                console.error("Task creation failed:", error);
-                res.status(500).json({ success: false, message: "Task creation failed", error });
-            }
+    // editor change only
+    app.put("/tasks/:id", async (req, res) => {
+      try {
+        const taskId = req.params.id;
+        const { title, description, priority, deadline, userId } = req.body;
+
+        const db = client.db("collabnesttools");
+        const tasksCollection = db.collection("tasks");
+
+        const task = await tasksCollection.findOne({
+          _id: new ObjectId(taskId),
         });
 
+        if (!task) {
+          return res.status(404).json({ message: "Task not found" });
+        }
 
+        if (task.userId !== userId) {
+          return res.status(403).json({
+            message: "Unauthorized: You can only edit your own tasks",
+          });
+        }
 
-        // Get tasks for a user
-        app.get("/user-tasks/:userId", async (req, res) => {
-            try {
-                const userTasks = await tasksCollection.find({ assignedTo: req.params.userId }).toArray();
-                res.status(200).json({ success: true, tasks: userTasks });
-            } catch (error) {
-                res.status(500).json({ success: false, message: "Failed to fetch user tasks", error });
-            }
+        const updatedTask = {
+          $set: { title, description, priority, deadline },
+        };
+
+        await tasksCollection.updateOne(
+          { _id: new ObjectId(taskId) },
+          updatedTask
+        );
+        res.status(200).json({ message: "Task updated successfully" });
+      } catch (error) {
+        console.error("Error updating task:", error);
+        res.status(500).json({ message: "Failed to update task" });
+      }
+    });
+
+    app.put("/tasks/:taskId", async (req, res) => {
+      try {
+        const taskId = new ObjectId(req.params.taskId);
+        const { status, userId } = req.body;
+
+        // Update the task status in the main task collection
+        const updatedTask = await tasksCollection.findOneAndUpdate(
+          { _id: taskId },
+          { $set: { status } },
+          { returnDocument: "after" }
+        );
+
+        if (!updatedTask.value) {
+          return res
+            .status(404)
+            .json({ success: false, message: "Task not found" });
+        }
+
+        // If status is "In-Progress" or "Completed", save it in a user-specific task collection
+        if (status === "In-Progress" || status === "Completed") {
+          const userTasksCollection = db.collection("user_tasks");
+
+          const userTask = {
+            userId,
+            taskId: updatedTask.value._id,
+            title: updatedTask.value.title,
+            description: updatedTask.value.description,
+            status,
+            externalLink: updatedTask.value.externalLink,
+            fileUrl: updatedTask.value.fileUrl,
+            createdAt: new Date(),
+          };
+
+          await userTasksCollection.insertOne(userTask);
+        }
+
+        res.status(200).json({ success: true, task: updatedTask.value });
+      } catch (error) {
+        res
+          .status(500)
+          .json({ success: false, message: "Task update failed", error });
+      }
+    });
+
+    app.delete("/tasks/:id", async (req, res) => {
+      try {
+        const taskId = req.params.id;
+        const userId = req.body.userId;
+
+        const db = client.db("collabnesttools");
+        const tasksCollection = db.collection("tasks");
+
+        const task = await tasksCollection.findOne({
+          _id: new ObjectId(taskId),
         });
 
+        if (!task) {
+          return res.status(404).json({ message: "Task not found" });
+        }
 
-        // editor change only
-        app.put("/tasks/:id", async (req, res) => {
-            try {
-                const taskId = req.params.id;
-                const { title, description, priority, deadline, userId } = req.body;
+        if (task.userId !== userId) {
+          return res.status(403).json({
+            message: "Unauthorized: You can only delete your own tasks",
+          });
+        }
 
-                const db = client.db("collabnesttools");
-                const tasksCollection = db.collection("tasks");
+        await tasksCollection.deleteOne({ _id: new ObjectId(taskId) });
+        res.status(200).json({ message: "Task deleted successfully" });
+      } catch (error) {
+        console.error("Error deleting task:", error);
+        res.status(500).json({ message: "Failed to delete task" });
+      }
+    });
 
-                const task = await tasksCollection.findOne({ _id: new ObjectId(taskId) });
+    // get all task
+    app.get("/tasks", async (req, res) => {
+      try {
+        const data = await tasksCollection.find({}).toArray();
+        res.json(data);
+      } catch (error) {
+        res.status(500).json({ message: "Error fetching tasks", error });
+      }
+    });
+    // post task
+    app.post("/tasks", async (req, res) => {
+      try {
+        const task = req.body;
+        const result = await tasksCollection.insertOne(task);
+        res.status(201).json({
+          message: "Task added successfully",
+          taskId: result.insertedId,
+        });
+      } catch (error) {
+        res.status(500).json({ message: "Error adding task", error });
+      }
+    });
 
-                if (!task) {
-                    return res.status(404).json({ message: "Task not found" });
-                }
+    app.delete("/tasks/:id", async (req, res) => {
+      const taskId = req.params.id;
 
-                if (task.userId !== userId) {
-                    return res.status(403).json({ message: "Unauthorized: You can only edit your own tasks" });
-                }
-
-                const updatedTask = {
-                    $set: { title, description, priority, deadline }
-                };
-
-                await tasksCollection.updateOne({ _id: new ObjectId(taskId) }, updatedTask);
-                res.status(200).json({ message: "Task updated successfully" });
-            } catch (error) {
-                console.error("Error updating task:", error);
-                res.status(500).json({ message: "Failed to update task" });
-            }
+      try {
+        const result = await tasksCollection.deleteOne({
+          _id: new ObjectId(taskId),
         });
 
-        app.put("/tasks/:taskId", async (req, res) => {
-            try {
-                const taskId = new ObjectId(req.params.taskId);
-                const { status, userId } = req.body;
+        if (result.deletedCount === 1) {
+          res.status(200).json({ message: "Task deleted successfully" });
+        } else {
+          res.status(404).json({ message: "Task not found" });
+        }
+      } catch (error) {
+        res.status(500).json({ message: "Error deleting task", error });
+      }
+    });
 
-                // Update the task status in the main task collection
-                const updatedTask = await tasksCollection.findOneAndUpdate(
-                    { _id: taskId },
-                    { $set: { status } },
-                    { returnDocument: "after" }
-                );
+    app.put("/tasks/:id", async (req, res) => {
+      const taskId = req.params.id;
+      const updatedTask = req.body;
 
-                if (!updatedTask.value) {
-                    return res.status(404).json({ success: false, message: "Task not found" });
-                }
+      try {
+        const result = await tasksCollection.updateOne(
+          { _id: new ObjectId(taskId) },
+          { $set: updatedTask }
+        );
 
-                // If status is "In-Progress" or "Completed", save it in a user-specific task collection
-                if (status === "In-Progress" || status === "Completed") {
-                    const userTasksCollection = db.collection("user_tasks");
+        if (result.modifiedCount === 1) {
+          res.status(200).json({ message: "Task updated successfully" });
+        } else {
+          res
+            .status(404)
+            .json({ message: "Task not found or no changes made" });
+        }
+      } catch (error) {
+        res.status(500).json({ message: "Error updating task", error });
+      }
+    });
 
-                    const userTask = {
-                        userId,
-                        taskId: updatedTask.value._id,
-                        title: updatedTask.value.title,
-                        description: updatedTask.value.description,
-                        status,
-                        externalLink: updatedTask.value.externalLink,
-                        fileUrl: updatedTask.value.fileUrl,
-                        createdAt: new Date()
-                    };
+    // User info from database
+    app.post("/user", async (req, res) => {
+      const {
+        fullName,
+        email,
+        photoURL,
+        userRole,
+        registrationDate,
+        userImage,
+        profession,
+        yearOfExperience,
+        registryType,
+      } = req.body;
 
-                    await userTasksCollection.insertOne(userTask);
-                }
+      try {
+        // Check if the user already exists
+        const existingUser = await userCollection.findOne({ email });
 
-                res.status(200).json({ success: true, task: updatedTask.value });
-            } catch (error) {
-                res.status(500).json({ success: false, message: "Task update failed", error });
-            }
+        if (existingUser) {
+          return res
+            .status(200)
+            .json({ message: "User already exists", userId: existingUser._id });
+        }
+
+        // Insert new user
+        const result = await userCollection.insertOne({
+          fullName,
+          email,
+          photoURL,
+          userRole,
+          registrationDate,
+          userImage: userImage || "n/a",
+          profession: profession || "n/a",
+          yearOfExperience: yearOfExperience || "n/a",
+          registryType: registryType || "email",
+        });
+        const result2 = await profileCollection.insertOne({
+          fullName,
+          email,
+          photoURL,
+          userRole,
+          registrationDate,
+          userImage: userImage || "n/a",
+          profession: profession || "n/a",
+          yearOfExperience: yearOfExperience || "n/a",
+          registryType: registryType || "email",
         });
 
-
-        app.delete("/tasks/:id", async (req, res) => {
-            try {
-                const taskId = req.params.id;
-                const userId = req.body.userId;
-
-                const db = client.db("collabnesttools");
-                const tasksCollection = db.collection("tasks");
-
-                const task = await tasksCollection.findOne({ _id: new ObjectId(taskId) });
-
-                if (!task) {
-                    return res.status(404).json({ message: "Task not found" });
-                }
-
-                if (task.userId !== userId) {
-                    return res.status(403).json({ message: "Unauthorized: You can only delete your own tasks" });
-                }
-
-                await tasksCollection.deleteOne({ _id: new ObjectId(taskId) });
-                res.status(200).json({ message: "Task deleted successfully" });
-            } catch (error) {
-                console.error("Error deleting task:", error);
-                res.status(500).json({ message: "Failed to delete task" });
-            }
+        res.status(201).json({
+          message: "User saved successfully",
+          userId: result.insertedId,
         });
-
-        // get all task
-        app.get('/tasks', async (req, res) => {
-            try {
-                const data = await tasksCollection.find({}).toArray();
-                res.json(data);
-            } catch (error) {
-                res.status(500).json({ message: "Error fetching tasks", error });
-            }
+        res.status(201).json({
+          message: "User saved successfully",
+          userId: result2.insertedId,
         });
-        // post task
-        app.post('/tasks', async (req, res) => {
-            try {
-                const task = req.body;
-                const result = await tasksCollection.insertOne(task);
-                res.status(201).json({ message: "Task added successfully", taskId: result.insertedId });
-            } catch (error) {
-                res.status(500).json({ message: "Error adding task", error });
-            }
-        });
+      } catch (error) {
+        console.error("Error saving user data:", error);
+        res.status(500).json({ message: "Error saving user data", error });
+      }
+    });
 
-        app.delete('/tasks/:id', async (req, res) => {
-            const taskId = req.params.id;
+    // profile related api
+    app.post("/profile/:email", async (req, res) => {
+      const email = req.params.email;
+      const profileInfo = req.body;
 
-            try {
-                const result = await tasksCollection.deleteOne({ _id: new ObjectId(taskId) });
+      try {
+        const isExist = await profileCollection.findOne({ email });
 
-                if (result.deletedCount === 1) {
-                    res.status(200).json({ message: "Task deleted successfully" });
-                } else {
-                    res.status(404).json({ message: "Task not found" });
-                }
-            } catch (error) {
-                res.status(500).json({ message: "Error deleting task", error });
-            }
-        });
+        if (isExist) {
+          const updatedProfile = await profileCollection.updateOne(
+            { email },
+            { $set: profileInfo }
+          );
 
-        app.put('/tasks/:id', async (req, res) => {
-            const taskId = req.params.id;
-            const updatedTask = req.body;
+          if (updatedProfile.modifiedCount > 0) {
+            res.status(200).json({ message: "profile updated successfully!" });
+          } else {
+            res.status(400).json({ message: "Failed to update profile" });
+          }
+        } else {
+          const newProfile = await profileCollection.insertOne({
+            email,
+            ...profileInfo,
+          });
 
-            try {
-                const result = await tasksCollection.updateOne(
-                    { _id: new ObjectId(taskId) },
-                    { $set: updatedTask }
-                );
+          if (newProfile.insertedId) {
+            res.status(201).json({ message: "Info added successfully!" });
+          } else {
+            res.status(400).json({ message: "Failed to add info!" });
+          }
+        }
+      } catch (error) {
+        console.error("Error handling profile update:", error);
+        res.status(500).json({ message: "Server error" });
+      }
+    });
+    app.get("/profileInfo/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email };
+      const result = await profileCollection.find(query).toArray();
+      res.send(result);
+    });
 
-                if (result.modifiedCount === 1) {
-                    res.status(200).json({ message: "Task updated successfully" });
-                } else {
-                    res.status(404).json({ message: "Task not found or no changes made" });
-                }
-            } catch (error) {
-                res.status(500).json({ message: "Error updating task", error });
-            }
-        });
-        // User info from database
-app.post("/user", async (req, res) => {
-            const {
-                fullName,
-                email,
-                photoURL,
-                userRole,
-                registrationDate,
-                userImage,
-                profession,
-                yearOfExperience,
-                registryType,
-            } = req.body;
-        
-            try {
-                // Check if the user already exists
-                const existingUser = await userCollection.findOne({ email });
-        
-                if (existingUser) {
-                    return res.status(200).json({ message: "User already exists", userId: existingUser._id });
-                }
-        
-                // Insert new user
-                const result = await userCollection.insertOne({
-                    fullName,
-                    email,
-                    photoURL,
-                    userRole,
-                    registrationDate,
-                    userImage: userImage || "n/a",
-                    profession: profession || "n/a",
-                    yearOfExperience: yearOfExperience || "n/a",
-                    registryType: registryType || "email",
-                });
-        
-                res.status(201).json({ message: "User saved successfully", userId: result.insertedId });
-            } catch (error) {
-                console.error("Error saving user data:", error);
-                res.status(500).json({ message: "Error saving user data", error });
-            }
-        });
+    // reaction related api start
+    app.post("/reactions", async (req, res) => {
+      const { cardId, reactions } = req.body;
+      const update =
+        reactions === "like"
+          ? { $inc: { likeCount: 1 } }
+          : reactions === "dislike"
+          ? { $inc: { disLikeCount: 1 } }
+          : null;
 
+      try {
+        const result = await reactionCollection.findOneAndUpdate(
+          { _id: cardId },
+          update,
+          { upsert: true, returnDocument: "after" }
+        );
 
-        // profile related api
-        app.post("/profile/:email", async (req, res) => {
-            const email = req.params.email;
-            const profileInfo = req.body;
+        if (!result.value) {
+          return res.status(404).send({ error: "Task not found" });
+        }
+        res.status(200).send(result.value);
+      } catch (err) {
+        res.status(500).send({ error: "Internal Server Error" });
+      }
+    });
 
-            try {
-                const isExist = await profileCollection.findOne({ email });
+    app.get("/reaction/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: id };
+      const result = await reactionCollection.findOne(query);
+      res.status(200).send(result);
+    });
+    // reaction related api end
 
-                if (isExist) {
-                    const updatedProfile = await profileCollection.updateOne(
-                        { email },
-                        { $set: profileInfo }
-                    );
+    // comment related api start
+    app.post("/comments/:id", async (req, res) => {
+      const id = req.params.id;
+      const { commentInfo } = req.body;
+      const taskId = new ObjectId(id);
+      const result = await commentCollection.insertOne({
+        taskId,
+        ...commentInfo,
+      });
+      res.status(200).send(result);
+    });
 
-                    if (updatedProfile.modifiedCount > 0) {
-                        res.status(200).json({ message: "profile updated successfully!" });
-                    } else {
-                        res.status(400).json({ message: "Failed to update profile" });
-                    }
-                } else {
-                    const newProfile = await profileCollection.insertOne({
-                        email,
-                        ...profileInfo,
-                    });
+    app.get("/comment/:id", async (req, res) => {
+      const taskId = req.params.id;
+      const objectId = new ObjectId(taskId);
+      const result = await commentCollection
+        .find({ taskId: objectId })
+        .toArray();
+      res.status(200).send(result);
+    });
+    // comment related api end
 
-                    if (newProfile.insertedId) {
-                        res.status(201).json({ message: "Info added successfully!" });
-                    } else {
-                        res.status(400).json({ message: "Failed to add info!" });
-                    }
-                }
-            } catch (error) {
-                console.error("Error handling profile update:", error);
-                res.status(500).json({ message: "Server error" });
-            }
-        });
-        app.get('/profileInfo/:email', async (req, res) => {
-            const email = req.params.email;
-            const query = { email }
-            const result = await profileCollection.find(query).toArray();
-            res.send(result)
-        })
+    // api for specific task with id
+    app.get("/task/:id", async (req, res) => {
+      const taskId = req.params.id;
+      let objectId;
+      objectId = new ObjectId(taskId);
+      const query = { _id: objectId };
+      const result = await tasksCollection.findOne(query);
+      res.status(200).send(result);
+    });
 
+    // api for uploding/updating user profile image
+    app.patch("/user/:email", async (req, res) => {
+      const { email } = req.params;
+      const { image } = req.body;
 
+      try {
+        const result = await userCollection.updateOne(
+          { email },
+          { $set: { photoURL: image, userImage: image } }
+        );
+        const result2 = await profileCollection.updateOne(
+          { email },
+          { $set: { photoURL: image, userImage: image } }
+        );
 
-    } catch (error) {
-        console.error("Error connecting to MongoDB:", error);
-    }
+        if (result.modifiedCount > 0) {
+          res.status(200).json({ message: "User photo updated successfully" });
+        } else {
+          res
+            .status(404)
+            .json({ message: "User not found or no changes made" });
+        }
+        if (result2.modifiedCount > 0) {
+          res.status(200).json({ message: "User photo updated successfully" });
+        } else {
+          res
+            .status(404)
+            .json({ message: "User not found or no changes made" });
+        }
+      } catch (error) {
+        console.error("Error updating photo:", error);
+        res.status(500).json({ message: "Server error", error });
+      }
+    });
 
-
+    // mention
+    app.get("/user", async (req, res) => {
+      try {
+        const users = await userCollection.find({}).toArray();
+        res.json(users);
+      } catch (error) {
+        res.status(500).json({ message: "Error fetching users", error });
+      }
+    });
+  } catch (error) {
+    console.error("Error connecting to MongoDB:", error);
+  }
 }
 
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
-    res.send("SIMPLE CRUD IS RUNNING");
+  res.send("SIMPLE CRUD IS RUNNING");
 });
 http.listen(port, () => {
-     console.log(`SIMPLE crud is running on port: ${port}`)
-
-})
+  console.log(`SIMPLE crud is running on port: ${port}`);
+});
