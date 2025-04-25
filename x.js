@@ -88,8 +88,7 @@ async function run() {
 
       try {
         const result = await client
-          // .db("collabnesttools")
-          .db("coffeeDB")
+          .db("collabnesttools")
           .collection("tasks")
           .insertOne(task);
 
@@ -546,15 +545,11 @@ async function run() {
 
         // Insert into both collections
         const result = await userCollection.insertOne(userData);
-        const result2 = await profileCollection.insertOne(userData);
+        await profileCollection.insertOne(userData);
 
         res.status(201).json({
           message: "User saved successfully",
           userId: result.insertedId,
-        });
-        res.status(201).json({
-          message: "User saved successfully",
-          userId: result2.insertedId,
         });
       } catch (error) {
         console.error("Error saving user data:", error);
@@ -650,6 +645,14 @@ async function run() {
       });
       res.status(200).send(result);
     });
+    app.get("/user", async (req, res) => {
+      try {
+        const users = await userCollection.find({}).toArray();
+        res.json(users);
+      } catch (error) {
+        res.status(500).json({ message: "Error fetching users", error });
+      }
+    });
 
     app.get("/comment/:id", async (req, res) => {
       const taskId = req.params.id;
@@ -669,16 +672,6 @@ async function run() {
       const query = { _id: objectId };
       const result = await tasksCollection.findOne(query);
       res.status(200).send(result);
-    });
-
-    // get all user
-    app.get("/user", async (req, res) => {
-      try {
-        const users = await userCollection.find({}).toArray();
-        res.json(users);
-      } catch (error) {
-        res.status(500).json({ message: "Error fetching users", error });
-      }
     });
 
     // api for uploding/updating user profile image
@@ -723,6 +716,8 @@ async function run() {
 
       socket.on("sendMessage", async (messageData) => {
         try {
+          console.log("Received message data:", messageData);
+
           const { roomId, senderId, message, senderName } = messageData;
 
           if (!roomId || !senderId || !message) {
@@ -755,7 +750,7 @@ async function run() {
       socket.on("joinRoom", async (roomId) => {
         try {
           socket.join(roomId);
-          // console.log(`User ${socket.id} joined room: ${roomId}`);
+          console.log(`User ${socket.id} joined room: ${roomId}`);
 
           // Fetch message history for that room
           const history = await messagesCollection
@@ -779,21 +774,21 @@ async function run() {
     });
 
     // temporary test endpoint
-    // app.post("/api/test-message", async (req, res) => {
-    //   try {
-    //     const testMsg = {
-    //       roomId: "test-room",
-    //       senderId: "test-user",
-    //       message: "This is a test message",
-    //       timestamp: new Date(),
-    //     };
+    app.post("/api/test-message", async (req, res) => {
+      try {
+        const testMsg = {
+          roomId: "test-room",
+          senderId: "test-user",
+          message: "This is a test message",
+          timestamp: new Date(),
+        };
 
-    //     const result = await messagesCollection.insertOne(testMsg);
-    //     res.json({ success: true, insertedId: result.insertedId });
-    //   } catch (err) {
-    //     res.status(500).json({ error: err.message });
-    //   }
-    // });
+        const result = await messagesCollection.insertOne(testMsg);
+        res.json({ success: true, insertedId: result.insertedId });
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    });
 
     // Chat API Endpoints
     app.get("/api/messages/:roomId", async (req, res) => {
@@ -818,15 +813,9 @@ async function run() {
 
 run().catch(console.dir);
 
-// Start server
-httpServer.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
-
-// app.listen(port, () => {
-//   console.log(`SIMPLE crud is running on port: ${port}`);
-// });
-
 app.get("/", (req, res) => {
   res.send("SIMPLE CRUD IS RUNNING");
+});
+app.listen(port, () => {
+  console.log(`SIMPLE crud is running on port: ${port}`);
 });

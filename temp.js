@@ -1,14 +1,17 @@
-require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+require("dotenv").config();
+const { MongoClient, ServerApiVersion } = require("mongodb");
 const port = process.env.PORT || 5000;
 const app = express();
 
-const { createServer } = require("http");
+// Middleware
+app.use(cors());
+app.use(express.json());
+const { ObjectId } = require("mongodb");
+const http = require("http").createServer(app);
 const { Server } = require("socket.io");
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
+const io = new Server(http, {
   cors: {
     origin: "*", // Adjust this for production
     methods: ["GET", "POST"],
@@ -18,13 +21,8 @@ io.on("connection", (socket) => {
   console.log("A user connected");
 });
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-
 // Database Connection URI
-// const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.khtuk.mongodb.net/?retryWrites=true&w=majority`;
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@srity.emu4l.mongodb.net/?retryWrites=true&w=majority&appName=Srity`;
+const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.khtuk.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient instance
 const client = new MongoClient(uri, {
@@ -41,9 +39,7 @@ async function run() {
     //   await client.db("admin").command({ ping: 1 });
     //   console.log("Group backend code structure created");
 
-    // const database = client.db("collabnesttools");
-    const database = client.db("coffeeDB");
-    const messagesCollection = database.collection("messages");
+    const database = client.db("collabnesttools");
     const tasksCollection = database.collection("tasks");
     const userCollection = database.collection("users");
     const profileCollection = database.collection("profileInfo");
@@ -88,22 +84,24 @@ async function run() {
 
       try {
         const result = await client
-          // .db("collabnesttools")
-          .db("coffeeDB")
+          .db("collabnesttools")
           .collection("tasks")
           .insertOne(task);
 
         // Emit to all connected clients
         io.emit("newImage", task);
 
-        res.status(201).json({
-          message: "Image shared successfully",
-          taskId: result.insertedId,
-        });
+        res
+          .status(201)
+          .json({
+            message: "Image shared successfully",
+            taskId: result.insertedId,
+          });
       } catch (error) {
         res.status(500).json({ message: "Failed to upload image", error });
       }
     });
+
     // req to db for group leader
     // In your Express app file or separate router
     app.post("/groupLeaderRequest", async (req, res) => {
@@ -224,10 +222,12 @@ async function run() {
         const { title, description, dueDate, userId, fileUrl } = req.body;
 
         if (!title || !dueDate) {
-          return res.status(400).json({
-            success: false,
-            message: "Title and due date are required",
-          });
+          return res
+            .status(400)
+            .json({
+              success: false,
+              message: "Title and due date are required",
+            });
         }
 
         const task = {
@@ -546,15 +546,11 @@ async function run() {
 
         // Insert into both collections
         const result = await userCollection.insertOne(userData);
-        const result2 = await profileCollection.insertOne(userData);
+        await profileCollection.insertOne(userData);
 
         res.status(201).json({
           message: "User saved successfully",
           userId: result.insertedId,
-        });
-        res.status(201).json({
-          message: "User saved successfully",
-          userId: result2.insertedId,
         });
       } catch (error) {
         console.error("Error saving user data:", error);
@@ -650,6 +646,14 @@ async function run() {
       });
       res.status(200).send(result);
     });
+    app.get("/user", async (req, res) => {
+      try {
+        const users = await userCollection.find({}).toArray();
+        res.json(users);
+      } catch (error) {
+        res.status(500).json({ message: "Error fetching users", error });
+      }
+    });
 
     app.get("/comment/:id", async (req, res) => {
       const taskId = req.params.id;
@@ -669,16 +673,6 @@ async function run() {
       const query = { _id: objectId };
       const result = await tasksCollection.findOne(query);
       res.status(200).send(result);
-    });
-
-    // get all user
-    app.get("/user", async (req, res) => {
-      try {
-        const users = await userCollection.find({}).toArray();
-        res.json(users);
-      } catch (error) {
-        res.status(500).json({ message: "Error fetching users", error });
-      }
     });
 
     // api for uploding/updating user profile image
@@ -714,102 +708,6 @@ async function run() {
         res.status(500).json({ message: "Error fetching users", error });
       }
     });
-
-    // ---------- chat codes starts here
-
-    // Socket.IO Real-time Chat
-    io.on("connection", (socket) => {
-      console.log("A user connected:", socket.id);
-
-      socket.on("sendMessage", async (messageData) => {
-        try {
-          const { roomId, senderId, message, senderName } = messageData;
-
-          if (!roomId || !senderId || !message) {
-            throw new Error("Missing required fields");
-          }
-
-          const newMessage = {
-            roomId,
-            senderId,
-            senderName: senderName || senderId,
-            message,
-            timestamp: new Date(),
-          };
-
-          const result = await messagesCollection.insertOne(newMessage);
-
-          io.to(roomId).emit("newMessage", {
-            ...newMessage,
-            _id: result.insertedId,
-          });
-        } catch (err) {
-          console.error("Message save error:", err);
-          socket.emit("chatError", {
-            type: "MESSAGE_SAVE_FAILED",
-            message: err.message,
-          });
-        }
-      });
-      // Listen for joining a room
-      socket.on("joinRoom", async (roomId) => {
-        try {
-          socket.join(roomId);
-          // console.log(`User ${socket.id} joined room: ${roomId}`);
-
-          // Fetch message history for that room
-          const history = await messagesCollection
-            .find({ roomId })
-            .sort({ timestamp: 1 })
-            .toArray();
-
-          socket.emit("chatHistory", history);
-        } catch (err) {
-          console.error("Error joining room:", err);
-          socket.emit("chatError", {
-            type: "JOIN_ROOM_FAILED",
-            message: err.message,
-          });
-        }
-      });
-
-      socket.on("disconnect", () => {
-        console.log("User disconnected:", socket.id);
-      });
-    });
-
-    // temporary test endpoint
-    // app.post("/api/test-message", async (req, res) => {
-    //   try {
-    //     const testMsg = {
-    //       roomId: "test-room",
-    //       senderId: "test-user",
-    //       message: "This is a test message",
-    //       timestamp: new Date(),
-    //     };
-
-    //     const result = await messagesCollection.insertOne(testMsg);
-    //     res.json({ success: true, insertedId: result.insertedId });
-    //   } catch (err) {
-    //     res.status(500).json({ error: err.message });
-    //   }
-    // });
-
-    // Chat API Endpoints
-    app.get("/api/messages/:roomId", async (req, res) => {
-      try {
-        const messages = await messagesCollection
-          .find({ roomId: req.params.roomId })
-          .sort({ timestamp: 1 })
-          .toArray();
-        res.json(messages);
-      } catch (err) {
-        console.error("Failed to fetch messages:", err);
-        res.status(500).json({ error: "Failed to fetch messages" });
-      }
-    });
-
-    // ---------- chat codes ends here
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
@@ -818,15 +716,9 @@ async function run() {
 
 run().catch(console.dir);
 
-// Start server
-httpServer.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
-
-// app.listen(port, () => {
-//   console.log(`SIMPLE crud is running on port: ${port}`);
-// });
-
 app.get("/", (req, res) => {
   res.send("SIMPLE CRUD IS RUNNING");
+});
+app.listen(port, () => {
+  console.log(`SIMPLE crud is running on port: ${port}`);
 });
