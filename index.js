@@ -23,8 +23,7 @@ app.use(cors());
 app.use(express.json());
 
 // Database Connection URI
-// const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.khtuk.mongodb.net/?retryWrites=true&w=majority`;
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@srity.emu4l.mongodb.net/?retryWrites=true&w=majority&appName=Srity`;
+const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.khtuk.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient instance
 const client = new MongoClient(uri, {
@@ -88,8 +87,8 @@ async function run() {
 
       try {
         const result = await client
-          // .db("collabnesttools")
-          .db("coffeeDB")
+          .db("collabnesttools")
+          // .db("coffeeDB")
           .collection("tasks")
           .insertOne(task);
 
