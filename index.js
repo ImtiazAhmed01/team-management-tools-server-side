@@ -1100,7 +1100,25 @@ async function run() {
                 res.status(500).json({ message: "Failed to fetch user tasks", error });
             }
         });
+        // pinned task
+        app.post('/pin-task', async (req, res) => {
+            const { taskId, email, pinned } = req.body;
 
+            if (!taskId || !email || typeof pinned !== "boolean") {
+                return res.status(400).json({ message: "Missing required fields" });
+            }
+
+            try {
+                const result = await userTaskCollection.updateOne(
+                    { "task._id": taskId, email },
+                    { $set: { pinned } }
+                );
+
+                res.status(200).json({ message: "Pin state updated", result });
+            } catch (error) {
+                res.status(500).json({ message: "Failed to update pin state", error });
+            }
+        });
 
 
 
