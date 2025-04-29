@@ -706,7 +706,7 @@ app.use(cors());
 app.use(express.json());
 
 // Database Connection URI
-const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.khtuk.mongodb.net/?retryWrites=true&w=majority`;
+const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.khtuk.mongodb.net/yourDBName?retryWrites=true&w=majority`;
 
 // Create a MongoClient instance
 const client = new MongoClient(uri, {
