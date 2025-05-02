@@ -32,6 +32,77 @@ async function run() {
         const taskCollection = database.collection('tasks');
         const userCollection = database.collection('users');
         const profileCollection = db.collection("profileInfo");
+        const notificationCollection = database.collection("notifications");
+
+        // Socket.IO Connection Handling
+        io.on("connection", (socket) => {
+            console.log(`A user connected: ${socket.id}`);
+
+            socket.on("join", (userEmail) => {
+                socket.join(userEmail);
+                console.log(`${userEmail} joined their notification room`);
+            });
+
+            socket.on("disconnect", () => {
+                console.log(`User disconnected: ${socket.id}`);
+            });
+        });
+
+        // Comment related API
+        app.post("/comments/:id", async (req, res) => {
+            const id = req.params.id;
+            const { commentInfo } = req.body;
+            const taskId = new ObjectId(id);
+
+            const result = await commentCollection.insertOne({
+                taskId,
+                ...commentInfo,
+            });
+
+            // Check for mentions and send notifications
+            if (commentInfo.mentionName && commentInfo.mentionEmail) {
+                const notification = {
+                    mentionName: commentInfo.mentionName,
+                    mentionEmail: commentInfo.mentionEmail,
+                    commentId: result.insertedId,
+                    taskId: taskId,
+                    read: false,
+                    createdAt: new Date(),
+                };
+
+                await notificationCollection.insertOne(notification);
+                io.to(commentInfo.mentionEmail).emit("newNotification", notification);
+            }
+
+            res.status(200).send(result);
+        });
+
+        app.get("/comment/:id", async (req, res) => {
+            const taskId = req.params.id;
+            const objectId = new ObjectId(taskId);
+            const result = await commentCollection
+                .find({ taskId: objectId })
+                .toArray();
+            res.status(200).send(result);
+        });
+
+        // Notification APIs
+        app.get("/notifications/:email", async (req, res) => {
+            const email = req.params.email;
+            const result = await notificationCollection
+                .find({ mentionEmail: email })
+                .toArray();
+            res.status(200).send(result);
+        });
+
+        app.put("/notifications/mark-read/:email", async (req, res) => {
+            const email = req.params.email;
+            const result = await notificationCollection.updateMany(
+                { mentionEmail: email, read: false },
+                { $set: { read: true } }
+            );
+            res.status(200).send({ message: "Notifications marked as read" });
+        });
         // get all task
         app.get('/tasks', async (req, res) => {
             try {
