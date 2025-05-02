@@ -43,6 +43,10 @@ async function run() {
         // Connect to MongoDB
         // await client.connect();
         // await client.db("admin").command({ ping: 1 });
+
+
+   
+
         console.log("Connected to MongoDB");
 
         const database = client.db("collabnesttools");
@@ -54,10 +58,18 @@ async function run() {
         const commentCollection = database.collection("comments");
         const userTaskCollection = database.collection("userTaskCollection");
         const imageCollection = database.collection("imagekCollection");
+        const notificationCollection = database.collection("notifications");
+
 
         // Socket.IO Connection Handling
         io.on("connection", (socket) => {
             console.log(`A user connected: ${socket.id}`);
+
+            socket.on("join", (userEmail) => {
+                socket.join(userEmail);
+                console.log(`${userEmail} joined their notification room`);
+            });
+
 
             // Handle joining a room
             socket.on("joinRoom", async (roomId) => {
@@ -117,11 +129,69 @@ async function run() {
             });
 
             // Handle disconnection
+
             socket.on("disconnect", () => {
                 console.log(`User disconnected: ${socket.id}`);
             });
         });
 
+
+        // Comment related API
+        app.post("/comments/:id", async (req, res) => {
+            const id = req.params.id;
+            const { commentInfo } = req.body;
+            const taskId = new ObjectId(id);
+
+            const result = await commentCollection.insertOne({
+                taskId,
+                ...commentInfo,
+            });
+
+            // Check for mentions and send notifications
+            if (commentInfo.mentionName && commentInfo.mentionEmail) {
+                const notification = {
+                    mentionName: commentInfo.mentionName,
+                    mentionEmail: commentInfo.mentionEmail,
+                    commentId: result.insertedId,
+                    taskId: taskId,
+                    read: false,
+                    createdAt: new Date(),
+                };
+
+                await notificationCollection.insertOne(notification);
+                io.to(commentInfo.mentionEmail).emit("newNotification", notification);
+            }
+
+            res.status(200).send(result);
+        });
+
+        app.get("/comment/:id", async (req, res) => {
+            const taskId = req.params.id;
+            const objectId = new ObjectId(taskId);
+            const result = await commentCollection
+                .find({ taskId: objectId })
+                .toArray();
+            res.status(200).send(result);
+        });
+
+        // Notification APIs
+        app.get("/notifications/:email", async (req, res) => {
+            const email = req.params.email;
+            const result = await notificationCollection
+                .find({ mentionEmail: email })
+                .toArray();
+            res.status(200).send(result);
+        });
+
+        app.put("/notifications/mark-read/:email", async (req, res) => {
+            const email = req.params.email;
+            const result = await notificationCollection.updateMany(
+                { mentionEmail: email, read: false },
+                { $set: { read: true } }
+            );
+            res.status(200).send({ message: "Notifications marked as read" });
+        });
+        
         // Tasks Endpoints
         app.get("/tasks", async (req, res) => {
             try {
@@ -297,6 +367,7 @@ async function run() {
                 res.status(500).json({ success: false, message: "Task creation failed", error });
             }
         });
+
 
         app.get('/tasks', async (req, res) => {
             try {
@@ -598,8 +669,10 @@ async function run() {
             const email = req.params.email;
             const query = { email };
             const result = await profileCollection.find(query).toArray();
-            res.send(result);
-        });
+
+            res.send(result)
+        })
+
 
         // Reaction Management
         app.post("/reactions", async (req, res) => {
@@ -643,26 +716,26 @@ async function run() {
             res.status(200).send(result);
         });
 
-        // Comment Management
-        app.post("/comments/:id", async (req, res) => {
-            const id = req.params.id;
-            const { commentInfo } = req.body;
-            const taskId = new ObjectId(id);
-            const result = await commentCollection.insertOne({
-                taskId,
-                ...commentInfo,
-            });
-            res.status(200).send(result);
-        });
+//         // Comment Management
+//         app.post("/comments/:id", async (req, res) => {
+//             const id = req.params.id;
+//             const { commentInfo } = req.body;
+//             const taskId = new ObjectId(id);
+//             const result = await commentCollection.insertOne({
+//                 taskId,
+//                 ...commentInfo,
+//             });
+//             res.status(200).send(result);
+//         });
 
-        app.get("/comment/:id", async (req, res) => {
-            const taskId = req.params.id;
-            const objectId = new ObjectId(taskId);
-            const result = await commentCollection
-                .find({ taskId: objectId })
-                .toArray();
-            res.status(200).send(result);
-        });
+//         app.get("/comment/:id", async (req, res) => {
+//             const taskId = req.params.id;
+//             const objectId = new ObjectId(taskId);
+//             const result = await commentCollection
+//                 .find({ taskId: objectId })
+//                 .toArray();
+//             res.status(200).send(result);
+//         });
 
         // Chat Messages
         app.get("/api/messages/:roomId", async (req, res) => {
@@ -675,6 +748,7 @@ async function run() {
             } catch (err) {
                 console.error("Failed to fetch messages:", err);
                 res.status(500).json({ error: "Failed to fetch messages" });
+
             }
         });
 
