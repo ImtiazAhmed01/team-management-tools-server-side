@@ -22,7 +22,9 @@ io.on("connection", (socket) => {
 });
 
 // Database Connection URI
-const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_pass}@cluster0.khtuk.mongodb.net/?retryWrites=true&w=majority`;
+const uri = `mongodb+srv://CollabNest:ulLvsZ5dH0JMIRsC@cluster0.fizmj.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+
+
 
 // Create a MongoClient instance
 const client = new MongoClient(uri, {
@@ -30,14 +32,15 @@ const client = new MongoClient(uri, {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
-  },
+  }
 });
 
 async function run() {
   try {
-    //   await client.connect();
-    //   await client.db("admin").command({ ping: 1 });
-    //   console.log("Group backend code structure created");
+    await client.connect();
+    // Send a ping to confirm a successful connection
+    await client.db("admin").command({ ping: 1 });
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
 
     const database = client.db("collabnesttools");
     const tasksCollection = database.collection("tasks");
@@ -46,6 +49,7 @@ async function run() {
     const reactionCollection = database.collection("reactions");
     const commentCollection = database.collection("comments");
     const userTaskCollection = database.collection("userTaskCollection");
+
 
     app.get("/tasks", async (req, res) => {
       try {
